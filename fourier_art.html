@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fourier Drawing Machine</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#07070e;--surf:#0d0d1e;--brd:#1e1e3a;
+  --acc:#7090e0;--a2:#d84070;--a3:#c8a030;
+  --fg:#d6d2ec;--dim:#484068;--cbg:#05050c;
+  --grid:rgba(112,144,224,.02);
+  --glow:0 0 18px rgba(112,144,224,.5);
+  --g2:0 0 18px rgba(216,64,112,.5);
+  --fs:0.78rem;                /* base font size – bigger UI */
+}
+[data-theme="light"]{
+  --bg:#f4f0e5;--surf:#ece7d5;--brd:#cec6ae;
+  --acc:#1c3878;--a2:#781428;--a3:#7a4c14;
+  --fg:#18140c;--dim:#7a7060;--cbg:#e8e2ce;
+  --grid:rgba(28,56,120,.035);
+  --glow:0 0 18px rgba(28,56,120,.28);
+  --g2:0 0 18px rgba(120,20,40,.28);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--fg);font-family:'Share Tech Mono',monospace;
+  font-size:var(--fs);display:flex;flex-direction:column;transition:background .3s,color .3s}
+
+/* scanlines */
+.scanline{position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.04) 2px,rgba(0,0,0,.04) 4px);
+  transition:opacity .3s}
+[data-theme="light"] .scanline{opacity:0}
+
+/* header */
+header{flex-shrink:0;text-align:center;padding:.6rem 1rem .35rem;
+  border-bottom:1px solid var(--brd);
+  background:linear-gradient(180deg,rgba(112,144,224,.05),transparent);
+  transition:background .3s,border-color .3s}
+[data-theme="light"] header{background:linear-gradient(180deg,rgba(28,56,120,.06),transparent)}
+header h1{font-family:'Orbitron',sans-serif;font-weight:900;
+  font-size:clamp(.9rem,2.5vw,1.8rem);letter-spacing:.15em;color:var(--acc);
+  text-shadow:var(--glow);transition:color .3s,text-shadow .3s}
+header p{font-size:.58rem;color:var(--dim);letter-spacing:.2em;margin-top:.18rem}
+
+/* app layout */
+.app{flex:1;min-height:0;display:grid;grid-template-columns:270px 1fr;
+  gap:.5rem;padding:.5rem;transition:grid-template-columns .3s}
+.app.sb-off{grid-template-columns:0px 1fr}
+@media(max-width:640px){
+  html,body{overflow:auto}
+  .app{grid-template-columns:1fr!important;height:auto}
+  .sidebar{order:2}
+  .main-area{order:1;min-height:70vw}
+}
+
+/* sidebar */
+.sidebar{display:flex;flex-direction:column;gap:.42rem;
+  overflow-y:auto;overflow-x:hidden;
+  scrollbar-width:thin;scrollbar-color:var(--brd) transparent;
+  transition:opacity .3s}
+.app.sb-off .sidebar{opacity:0;pointer-events:none}
+
+/* panel */
+.panel{background:var(--surf);border:1px solid var(--brd);
+  padding:.7rem .8rem;position:relative;flex-shrink:0;
+  transition:background .3s,border-color .3s}
+.panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,var(--acc),transparent);transition:background .3s}
+.pt{font-family:'Orbitron',sans-serif;font-size:.58rem;letter-spacing:.26em;
+  color:var(--acc);margin-bottom:.6rem;text-transform:uppercase;transition:color .3s}
+
+/* tabs */
+.tab-row{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-bottom:.6rem}
+.tb{background:transparent;border:1px solid var(--brd);color:var(--dim);
+  font-family:'Share Tech Mono',monospace;font-size:var(--fs);
+  padding:.38rem;cursor:pointer;letter-spacing:.06em;transition:all .15s;text-align:center}
+.tb.active{background:color-mix(in srgb,var(--acc) 14%,transparent);
+  border-color:var(--acc);color:var(--acc);box-shadow:var(--glow)}
+.tb:hover:not(.active){border-color:var(--dim);color:var(--fg)}
+.tc{display:none}.tc.active{display:block}
+
+/* upload zone */
+.uzone{border:1px dashed var(--dim);padding:.9rem .6rem;
+  text-align:center;cursor:pointer;transition:all .2s;position:relative}
+.uzone:hover,.uzone.over{border-color:var(--acc);
+  background:color-mix(in srgb,var(--acc) 6%,transparent)}
+.uzone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.uzone p{font-size:.68rem;color:var(--dim);line-height:1.7}
+
+/* range inputs – bigger */
+.ctrl{margin-bottom:.5rem}
+.ctrl label{display:flex;justify-content:space-between;
+  font-size:var(--fs);color:var(--dim);margin-bottom:.22rem;letter-spacing:.05em}
+.ctrl label span{color:var(--acc)}
+input[type=range]{width:100%;-webkit-appearance:none;height:4px;
+  background:var(--brd);outline:none;cursor:pointer;border-radius:2px;
+  transition:background .3s}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;
+  border-radius:50%;background:var(--acc);box-shadow:0 0 5px var(--acc);cursor:pointer;
+  transition:background .3s,box-shadow .3s}
+
+/* color rows */
+.crow{display:flex;align-items:center;gap:.4rem;margin-bottom:.38rem}
+.crow label{font-size:var(--fs);color:var(--dim);flex:1;letter-spacing:.05em}
+input[type=color]{width:28px;height:18px;border:1px solid var(--brd);
+  background:transparent;cursor:pointer;padding:0}
+
+/* toggle row (checkbox-style slider) */
+.trow{display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:.38rem;font-size:var(--fs);color:var(--dim)}
+.toggle-pill{position:relative;width:38px;height:20px;cursor:pointer;flex-shrink:0}
+.toggle-pill input{opacity:0;width:0;height:0;position:absolute}
+.pill-track{position:absolute;inset:0;background:var(--brd);border-radius:10px;
+  transition:background .2s}
+.pill-dot{position:absolute;top:3px;left:3px;width:14px;height:14px;
+  background:var(--dim);border-radius:50%;transition:all .2s}
+.toggle-pill input:checked ~ .pill-track{background:var(--acc)}
+.toggle-pill input:checked ~ .pill-dot{left:21px;background:#fff}
+
+/* select */
+select{background:var(--surf);border:1px solid var(--brd);color:var(--fg);
+  font-family:'Share Tech Mono',monospace;font-size:var(--fs);
+  padding:.3rem .5rem;cursor:pointer;width:100%;outline:none;
+  transition:background .3s,border-color .3s}
+select:focus{border-color:var(--acc)}
+
+/* buttons */
+.btn{background:transparent;border:1px solid var(--acc);color:var(--acc);
+  font-family:'Share Tech Mono',monospace;font-size:var(--fs);
+  padding:.44rem;cursor:pointer;letter-spacing:.09em;text-transform:uppercase;
+  transition:all .15s;width:100%;margin-bottom:.32rem;display:block}
+.btn:hover{background:color-mix(in srgb,var(--acc) 13%,transparent);box-shadow:var(--glow)}
+.btn.pri{background:color-mix(in srgb,var(--acc) 11%,transparent)}
+.btn.danger{border-color:var(--a2);color:var(--a2)}
+.btn.danger:hover{background:color-mix(in srgb,var(--a2) 12%,transparent);box-shadow:var(--g2)}
+.btn:disabled{opacity:.22;cursor:not-allowed;pointer-events:none}
+
+/* status */
+.srow{display:flex;align-items:center;margin-top:.6rem}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--dim);margin-right:.4rem;flex-shrink:0}
+.dot.on{background:var(--acc);box-shadow:0 0 5px var(--acc)}
+.dot.run{background:var(--a3);box-shadow:0 0 5px var(--a3);animation:blink .7s infinite}
+.dot.err{background:var(--a2);box-shadow:0 0 5px var(--a2)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.12}}
+.stxt{font-size:var(--fs);color:var(--dim);letter-spacing:.05em}
+
+/* main area */
+.main-area{display:flex;flex-direction:column;gap:.42rem;min-height:0}
+
+/* floating toolbar over canvas */
+.zbar{position:absolute;top:.55rem;right:.55rem;z-index:20;
+  display:flex;align-items:center;gap:.18rem}
+.zbtn{background:var(--surf);border:1px solid var(--brd);color:var(--fg);
+  font-family:'Share Tech Mono',monospace;font-size:.72rem;
+  width:26px;height:22px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  padding:0;letter-spacing:0;transition:all .15s}
+.zbtn:hover{border-color:var(--acc);color:var(--acc);box-shadow:var(--glow)}
+.zlbl{background:var(--surf);border:1px solid var(--brd);font-size:.54rem;
+  color:var(--dim);padding:0 .4rem;height:22px;display:flex;align-items:center;
+  letter-spacing:.07em;min-width:48px;justify-content:center}
+.zsep{width:1px;height:15px;background:var(--brd);margin:0 .1rem}
+
+/* track indicator overlay */
+.track-ring{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:20px;height:20px;border:2px solid var(--a3);border-radius:50%;
+  pointer-events:none;z-index:15;opacity:0;transition:opacity .3s}
+.track-ring.vis{opacity:.7;animation:trackPulse 1.5s infinite}
+@keyframes trackPulse{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.7}
+  50%{transform:translate(-50%,-50%) scale(1.5);opacity:.35}}
+
+/* canvas wrapper */
+.cwrap{position:relative;background:var(--cbg);border:1px solid var(--brd);
+  flex:1;min-height:0;overflow:hidden;transition:background .3s,border-color .3s}
+.cwrap::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;
+  background:linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:52px 52px}
+canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+#iCv{z-index:2}
+#fCv{z-index:3;pointer-events:none}
+.hint{position:absolute;bottom:.7rem;left:50%;transform:translateX(-50%);
+  font-size:.52rem;color:var(--dim);letter-spacing:.16em;
+  pointer-events:none;z-index:10;transition:opacity .5s;white-space:nowrap}
+.cwrap.panning{cursor:grab}
+.cwrap.panning:active{cursor:grabbing}
+
+/* info bar */
+.ibar{display:flex;gap:.38rem;flex-wrap:wrap;flex-shrink:0}
+.chip{background:var(--surf);border:1px solid var(--brd);
+  padding:.24rem .55rem;font-size:.62rem;color:var(--dim);letter-spacing:.06em;
+  transition:background .3s,border-color .3s}
+.chip strong{color:var(--acc);font-weight:normal}
+
+/* ═══ EQUATION MODAL ═══ */
+.eq-overlay{position:fixed;inset:0;z-index:2000;
+  background:rgba(0,0,0,.88);display:none;overflow:auto}
+[data-theme="light"] .eq-overlay{background:rgba(0,0,0,.6)}
+.eq-overlay.vis{display:block}
+.eq-box{max-width:680px;margin:2rem auto;background:var(--surf);
+  border:1px solid var(--brd);padding:1.4rem;position:relative}
+.eq-box::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,var(--acc),transparent)}
+.eq-title{font-family:'Orbitron',sans-serif;font-size:.75rem;letter-spacing:.2em;
+  color:var(--acc);margin-bottom:1rem;text-shadow:var(--glow)}
+.eq-close{position:absolute;top:.8rem;right:.8rem;background:transparent;
+  border:1px solid var(--brd);color:var(--dim);width:24px;height:24px;
+  cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;
+  transition:all .15s}
+.eq-close:hover{border-color:var(--acc);color:var(--acc)}
+.eq-formula{font-family:'Share Tech Mono',monospace;font-size:.68rem;
+  color:var(--fg);line-height:2;margin-bottom:1rem;padding:.8rem;
+  background:var(--bg);border:1px solid var(--brd)}
+.eq-table{width:100%;border-collapse:collapse;font-size:.64rem;margin-top:.5rem}
+.eq-table th{color:var(--acc);padding:.3rem .5rem;border-bottom:1px solid var(--brd);
+  text-align:left;letter-spacing:.1em;font-weight:normal}
+.eq-table td{padding:.28rem .5rem;border-bottom:1px solid color-mix(in srgb,var(--brd) 50%,transparent);
+  color:var(--dim)}
+.eq-table td:first-child{color:var(--fg)}
+.eq-table tr:hover td{background:color-mix(in srgb,var(--acc) 5%,transparent)}
+.eq-copy{font-size:.62rem;margin-top:.8rem;padding:.4rem .8rem;width:auto;
+  display:inline-block;letter-spacing:.1em}
+</style>
+</head>
+<body>
+<div class="scanline"></div>
+
+<header>
+  <h1>FOURIER DRAWING MACHINE</h1>
+  <p>COMPLEX FFT · EPICYCLES · ZOOM · TRACK · LIGHT MODE</p>
+</header>
+
+<div class="app" id="app">
+
+  <!-- ══════ SIDEBAR ══════ -->
+  <div class="sidebar" id="sidebar">
+
+    <!-- INPUT -->
+    <div class="panel">
+      <div class="pt">// Input Mode</div>
+      <div class="tab-row">
+        <button class="tb active" id="tdBtn" onclick="switchTab('draw')">✏ Draw</button>
+        <button class="tb" id="tuBtn" onclick="switchTab('upload')">⬆ Upload</button>
+      </div>
+      <div id="tc-draw" class="tc active">
+        <p style="font-size:.68rem;color:var(--dim);line-height:1.65;margin-bottom:.5rem">
+          Freehand any path. Try to connect back to start for a closed loop.
+        </p>
+        <button class="btn" onclick="clearAll()">⟳ Clear Canvas</button>
+        <button class="btn pri" id="runD" onclick="startFourier()" disabled>▶ Run Fourier</button>
+      </div>
+      <div id="tc-upload" class="tc">
+        <div class="uzone" id="uzone">
+          <input type="file" id="fInput" accept="image/*,image/svg+xml" onchange="handleFile(event)">
+          <p>⬆<br>PNG · JPG · SVG<br>drop here or click</p>
+        </div>
+        <div id="upSt" style="font-size:.6rem;color:var(--dim);margin-top:.38rem;min-height:.85em;letter-spacing:.06em"></div>
+        <button class="btn pri" id="runU" onclick="startFourier()" style="margin-top:.45rem" disabled>▶ Run Fourier</button>
+      </div>
+    </div>
+
+    <!-- PARAMETERS -->
+    <div class="panel">
+      <div class="pt">// Parameters</div>
+      <div class="ctrl">
+        <label>Epicycles <span id="vE">120</span></label>
+        <input type="range" id="sE" min="1" max="512" value="120"
+          oninput="document.getElementById('vE').textContent=this.value">
+      </div>
+      <div class="ctrl">
+        <label>Speed <span id="vSp">1.00×</span></label>
+        <!-- log scale: v=0→0.0001×  v=80→1.0×  v=100→10× -->
+        <input type="range" id="sSp" min="0" max="100" value="80" step="1"
+          oninput="syncSpeedLabel()">
+      </div>
+      <div class="ctrl">
+        <label>Trail Length <span id="vTl">4000</span></label>
+        <input type="range" id="sTl" min="100" max="16000" step="100" value="4000"
+          oninput="document.getElementById('vTl').textContent=this.value">
+      </div>
+      <div class="ctrl">
+        <label>Min Radius (zoomed) <span id="vMn">0.5px</span></label>
+        <input type="range" id="sMn" min="1" max="80" value="5"
+          oninput="document.getElementById('vMn').textContent=(this.value/10).toFixed(1)+'px'">
+      </div>
+    </div>
+
+    <!-- VISUALS -->
+    <div class="panel">
+      <div class="pt">// Visuals</div>
+      <div class="crow"><label>CIRCLES</label>  <input type="color" id="cC" value="#7090e0"></div>
+      <div class="crow"><label>ARROWS</label>   <input type="color" id="cA" value="#c8a030"></div>
+      <div class="crow"><label>TRAIL</label>    <input type="color" id="cT" value="#d84070"></div>
+      <div class="ctrl" style="margin-top:.38rem">
+        <label>Circle Opacity <span id="vCO">30%</span></label>
+        <input type="range" id="sCO" min="3" max="95" value="30"
+          oninput="document.getElementById('vCO').textContent=this.value+'%'">
+      </div>
+      <div class="ctrl">
+        <label>Circle Stroke <span id="vCS">0.8</span></label>
+        <input type="range" id="sCS" min="2" max="40" value="8"
+          oninput="document.getElementById('vCS').textContent=(this.value/10).toFixed(1)">
+      </div>
+      <div class="ctrl">
+        <label>Arrow/Trail Weight <span id="vLW">1.2</span></label>
+        <input type="range" id="sLW" min="3" max="40" value="12"
+          oninput="document.getElementById('vLW').textContent=(this.value/10).toFixed(1)">
+      </div>
+      <div class="trow"><span>Show Circles</span>
+        <label class="toggle-pill"><input type="checkbox" id="tSC" checked onchange="">
+          <div class="pill-track"></div><div class="pill-dot"></div></label></div>
+      <div class="trow"><span>Show Arrows</span>
+        <label class="toggle-pill"><input type="checkbox" id="tSA" checked>
+          <div class="pill-track"></div><div class="pill-dot"></div></label></div>
+      <div class="trow"><span>Trail Fade</span>
+        <label class="toggle-pill"><input type="checkbox" id="tTF" checked>
+          <div class="pill-track"></div><div class="pill-dot"></div></label></div>
+      <div class="trow"><span>Show Original Drawing</span>
+        <label class="toggle-pill"><input type="checkbox" id="tSD" checked onchange="onToggleInput()">
+          <div class="pill-track"></div><div class="pill-dot"></div></label></div>
+    </div>
+
+    <!-- CAMERA / TRACK -->
+    <div class="panel">
+      <div class="pt">// Camera · Track</div>
+      <div class="ctrl">
+        <label>Follow Mode</label>
+        <select id="followSel" onchange="onFollowChange()">
+          <option value="off">Off — free pan/zoom</option>
+          <option value="tip">✦ Track Trail Tip</option>
+          <option value="epi">⊙ Track Epicycle #N</option>
+        </select>
+      </div>
+      <div class="ctrl" id="epiRow" style="display:none">
+        <label>Epicycle # <span id="vFE">1</span></label>
+        <input type="range" id="sFE" min="1" max="512" value="1"
+          oninput="document.getElementById('vFE').textContent=this.value">
+      </div>
+      <p style="font-size:.6rem;color:var(--dim);line-height:1.6;margin-top:.2rem">
+        When tracking, scroll to zoom in/out on the tracked point. Drag disabled while tracking.
+      </p>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="panel">
+      <div class="pt">// Controls</div>
+      <button class="btn" id="pBtn" onclick="togglePause()" disabled>⏸ Pause</button>
+      <button class="btn" id="rBtn" onclick="restartAnim()" disabled>⟳ Restart</button>
+      <button class="btn" onclick="openEqModal()" id="eqBtn" disabled>∑ Fourier Equation</button>
+      <button class="btn danger" onclick="clearAll()">✕ Full Reset</button>
+      <div class="srow">
+        <div class="dot" id="sDot"></div>
+        <span class="stxt" id="sTxt">IDLE — DRAW OR UPLOAD</span>
+      </div>
+    </div>
+
+  </div><!-- /sidebar -->
+
+  <!-- ══════ MAIN ══════ -->
+  <div class="main-area">
+    <div class="cwrap" id="cwrap">
+      <canvas id="iCv"></canvas>
+      <canvas id="fCv"></canvas>
+
+      <!-- Floating toolbar -->
+      <div class="zbar">
+        <button class="zbtn" onclick="zoomStep(1.22)" title="Zoom in">+</button>
+        <div class="zlbl" id="zlbl">100%</div>
+        <button class="zbtn" onclick="zoomStep(1/1.22)" title="Zoom out">−</button>
+        <button class="zbtn" onclick="resetView()" title="Reset view">⊙</button>
+        <div class="zsep"></div>
+        <button class="zbtn" onclick="toggleSidebar()" title="Toggle panel">☰</button>
+        <button class="zbtn" id="themeBtn" onclick="toggleTheme()" title="Toggle light/dark">☀</button>
+      </div>
+
+      <!-- Track indicator ring at canvas center -->
+      <div class="track-ring" id="trackRing"></div>
+
+      <div class="hint" id="hint">DRAW YOUR PATH — MOUSE OR TOUCH</div>
+    </div>
+
+    <div class="ibar">
+      <div class="chip">INPUT <strong id="iPts">0</strong> pts</div>
+      <div class="chip">FFT-N <strong id="iN">—</strong></div>
+      <div class="chip">EPICYCLES <strong id="iEpc">—</strong></div>
+      <div class="chip">CYCLE <strong id="iProg">0%</strong></div>
+      <div class="chip">ZOOM <strong id="iZoom">1.00×</strong></div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- Equation Modal -->
+<div class="eq-overlay" id="eqOverlay">
+  <div class="eq-box">
+    <button class="eq-close" onclick="closeEqModal()">✕</button>
+    <div class="eq-title">∑ FOURIER SERIES DECOMPOSITION</div>
+    <div class="eq-formula" id="eqFormula">Run simulation first.</div>
+    <div style="overflow-x:auto"><table class="eq-table" id="eqTable"></table></div>
+    <button class="btn eq-copy" onclick="copyEqText()">⎘ Copy as Text</button>
+  </div>
+</div>
+
+<!-- Hidden canvas for image processing -->
+<canvas id="off" style="display:none;position:fixed;left:-9999px;top:-9999px"></canvas>
+
+<script>
+'use strict';
+/* ══════════════════════════════════════════════
+   CANVAS  +  DEVICE PIXEL RATIO
+   All coordinates in logical (CSS) pixels.
+   DPR baked into every ctx.setTransform call.
+══════════════════════════════════════════════ */
+const DPR   = window.devicePixelRatio || 1;
+const iCv   = document.getElementById('iCv');
+const fCv   = document.getElementById('fCv');
+const offCv = document.getElementById('off');
+const iCtx  = iCv.getContext('2d');
+const fCtx  = fCv.getContext('2d');
+const offX  = offCv.getContext('2d');
+const cwrap = document.getElementById('cwrap');
+
+const LW = () => fCv.width  / DPR;   // logical canvas width
+const LH = () => fCv.height / DPR;   // logical canvas height
+
+function resize() {
+  const w = cwrap.clientWidth, h = cwrap.clientHeight;
+  for (const cv of [iCv, fCv]) {
+    cv.width = w * DPR; cv.height = h * DPR;
+    cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  }
+}
+window.addEventListener('resize', resize);
+setTimeout(resize, 60);
+
+// Clear a canvas in logical space (DPR compensated)
+function clearCanvas(ctx) {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, LW(), LH());
+}
+
+/* ══════════════════════════════════════════════
+   VIEW  –  Zoom / Pan
+   screen = world * scale + (tx, ty)   (logical px)
+══════════════════════════════════════════════ */
+const view = { tx: 0, ty: 0, scale: 1 };
+
+function zoomAt(mx, my, factor) {
+  const wx = (mx - view.tx) / view.scale;
+  const wy = (my - view.ty) / view.scale;
+  view.scale = Math.max(0.08, Math.min(150, view.scale * factor));
+  view.tx = mx - wx * view.scale;
+  view.ty = my - wy * view.scale;
+  syncZoomUI();
+}
+function zoomStep(f) { zoomAt(LW()/2, LH()/2, f); }
+function resetView()  { view.tx = 0; view.ty = 0; view.scale = 1; syncZoomUI(); }
+function syncZoomUI() {
+  document.getElementById('zlbl').textContent  = Math.round(view.scale*100) + '%';
+  document.getElementById('iZoom').textContent = view.scale.toFixed(2) + '×';
+}
+
+// Apply view transform on top of DPR base
+function applyViewCtx(ctx) {
+  // called after clearCanvas; adds the zoom/pan on top
+  ctx.transform(view.scale, 0, 0, view.scale, view.tx, view.ty);
+}
+
+// Mouse wheel
+cwrap.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = fCv.getBoundingClientRect();
+  zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.1 : 1/1.1);
+}, { passive: false });
+
+// Drag pan  (only when not tracking)
+let panning = false, panLast = {x:0,y:0};
+cwrap.addEventListener('mousedown', e => {
+  const mode = document.getElementById('followSel').value;
+  if ((S.running || S.paused) && mode === 'off') {
+    panning = true; panLast = {x:e.clientX, y:e.clientY};
+    cwrap.classList.add('panning');
+  }
+});
+window.addEventListener('mousemove', e => {
+  if (!panning) return;
+  view.tx += e.clientX - panLast.x;
+  view.ty += e.clientY - panLast.y;
+  panLast = {x:e.clientX, y:e.clientY};
+  syncZoomUI();
+});
+window.addEventListener('mouseup', () => { panning = false; cwrap.classList.remove('panning'); });
+
+// Pinch zoom
+let pinchD0 = 0;
+cwrap.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) { e.preventDefault(); pinchD0 = tDist(e.touches); }
+}, { passive: false });
+cwrap.addEventListener('touchmove', e => {
+  if (e.touches.length === 2 && pinchD0 > 0) {
+    e.preventDefault();
+    const d = tDist(e.touches);
+    const r = fCv.getBoundingClientRect();
+    zoomAt((e.touches[0].clientX+e.touches[1].clientX)/2 - r.left,
+           (e.touches[0].clientY+e.touches[1].clientY)/2 - r.top, d/pinchD0);
+    pinchD0 = d;
+  }
+}, { passive: false });
+function tDist(t) { return Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY); }
+
+/* ══════════════════════════════════════════════
+   THEME
+══════════════════════════════════════════════ */
+const PAL = {
+  dark:  {c:'#7090e0', a:'#c8a030', t:'#d84070'},
+  light: {c:'#1c3878', a:'#7a4c14', t:'#78122a'},
+};
+function toggleTheme() {
+  const root = document.documentElement;
+  const isDk = root.dataset.theme === 'dark';
+  root.dataset.theme = isDk ? 'light' : 'dark';
+  document.getElementById('themeBtn').textContent = isDk ? '🌙' : '☀';
+  const p = PAL[root.dataset.theme];
+  document.getElementById('cC').value = p.c;
+  document.getElementById('cA').value = p.a;
+  document.getElementById('cT').value = p.t;
+}
+
+/* ══════════════════════════════════════════════
+   SIDEBAR COLLAPSE
+══════════════════════════════════════════════ */
+function toggleSidebar() {
+  document.getElementById('app').classList.toggle('sb-off');
+}
+
+/* ══════════════════════════════════════════════
+   SPEED  –  Logarithmic slider
+   v=0 → 10^(-4) = 0.0001×
+   v=80 → 10^0   = 1.0×   (default)
+   v=100 → 10^1  = 10×
+══════════════════════════════════════════════ */
+function sliderToSpeed() {
+  return Math.pow(10, -4 + document.getElementById('sSp').value * 0.05);
+}
+function syncSpeedLabel() {
+  const v = sliderToSpeed();
+  let s;
+  if      (v < 0.001)  s = v.toExponential(1);
+  else if (v < 0.01)   s = v.toFixed(5);
+  else if (v < 0.1)    s = v.toFixed(4);
+  else if (v < 1)      s = v.toFixed(3);
+  else if (v < 10)     s = v.toFixed(2);
+  else                 s = v.toFixed(1);
+  document.getElementById('vSp').textContent = s + '×';
+}
+syncSpeedLabel();
+
+/* ══════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════ */
+const S = {
+  tab: 'draw', drawing: false,
+  inputPts: [],
+  centroid: {x:0, y:0},
+  fourier: [], fftN: 0,
+  time: 0, trail: [],
+  running: false, paused: false, animId: null,
+  // Open-path trail cutoff
+  trailCutoff: 1.0,   // fraction of [0,2π] that corresponds to real drawn path
+  isOpen: false,
+};
+
+/* ══════════════════════════════════════════════
+   TAB
+══════════════════════════════════════════════ */
+function switchTab(t) {
+  S.tab = t;
+  document.getElementById('tdBtn').classList.toggle('active', t==='draw');
+  document.getElementById('tuBtn').classList.toggle('active', t==='upload');
+  document.getElementById('tc-draw').classList.toggle('active', t==='draw');
+  document.getElementById('tc-upload').classList.toggle('active', t==='upload');
+  iCv.style.pointerEvents = t==='draw' ? 'auto' : 'none';
+  document.getElementById('hint').textContent =
+    t==='draw' ? 'DRAW YOUR PATH — MOUSE OR TOUCH' : 'UPLOAD AN IMAGE OR SVG';
+}
+
+/* ══════════════════════════════════════════════
+   DRAWING  (iCanvas)
+══════════════════════════════════════════════ */
+function evXY(e) {
+  const r = iCv.getBoundingClientRect();
+  const s = e.touches ? e.touches[0] : e;
+  return {x: s.clientX - r.left, y: s.clientY - r.top};
+}
+iCv.addEventListener('mousedown',  e => startDraw(evXY(e)));
+iCv.addEventListener('mousemove',  e => { if (S.drawing) addPt(evXY(e)); });
+iCv.addEventListener('mouseup',    endDraw);
+iCv.addEventListener('mouseleave', endDraw);
+iCv.addEventListener('touchstart', e => { e.preventDefault(); if (e.touches.length===1) startDraw(evXY(e)); }, {passive:false});
+iCv.addEventListener('touchmove',  e => { e.preventDefault(); if (e.touches.length===1) addPt(evXY(e)); }, {passive:false});
+iCv.addEventListener('touchend',   e => { e.preventDefault(); endDraw(); }, {passive:false});
+
+function startDraw(pos) {
+  if (S.tab !== 'draw') return;
+  if (S.running) stopAnim();
+  clearFourier();
+  S.drawing = true; S.inputPts = [pos];
+  clearCanvas(iCtx);
+  iCtx.beginPath(); iCtx.moveTo(pos.x, pos.y);
+  document.getElementById('hint').style.opacity = '0';
+  document.getElementById('runD').disabled = true;
+  setStatus('run', 'DRAWING…');
+}
+function addPt(pos) {
+  if (!S.drawing) return;
+  const lp = S.inputPts[S.inputPts.length-1];
+  if ((pos.x-lp.x)**2+(pos.y-lp.y)**2 < 4) return;
+  S.inputPts.push(pos);
+  iCtx.lineTo(pos.x, pos.y);
+  iCtx.strokeStyle = document.getElementById('cT').value + 'bb';
+  iCtx.lineWidth = 2; iCtx.lineCap = iCtx.lineJoin = 'round';
+  iCtx.stroke();
+  document.getElementById('iPts').textContent = S.inputPts.length;
+}
+function endDraw() {
+  if (!S.drawing) return;
+  S.drawing = false;
+  if (S.inputPts.length > 20) {
+    document.getElementById('runD').disabled = false;
+    setStatus('on', 'PATH READY — PRESS ▶ RUN');
+  } else { setStatus('', 'IDLE — DRAW MORE'); }
+}
+
+// Draw input path at the current view transform (called every animate frame)
+function drawInputPath() {
+  const pts = S.inputPts;
+  if (pts.length < 2) return;
+  iCtx.save();
+  applyViewCtx(iCtx);
+  iCtx.beginPath();
+  iCtx.moveTo(pts[0].x, pts[0].y);
+  for (let i=1; i<pts.length; i++) iCtx.lineTo(pts[i].x, pts[i].y);
+  iCtx.strokeStyle = document.getElementById('cT').value + '77';
+  iCtx.lineWidth = 1.6 / view.scale;
+  iCtx.lineCap = iCtx.lineJoin = 'round';
+  iCtx.stroke();
+  iCtx.restore();
+}
+
+/* ══════════════════════════════════════════════
+   UPLOAD
+══════════════════════════════════════════════ */
+const uzone = document.getElementById('uzone');
+uzone.addEventListener('dragover',  e => { e.preventDefault(); uzone.classList.add('over'); });
+uzone.addEventListener('dragleave', () => uzone.classList.remove('over'));
+uzone.addEventListener('drop', e => {
+  e.preventDefault(); uzone.classList.remove('over');
+  if (e.dataTransfer.files[0]) doFile(e.dataTransfer.files[0]);
+});
+function handleFile(e) { if (e.target.files[0]) doFile(e.target.files[0]); }
+function doFile(file) {
+  setStatus('run','READING…'); upSt('reading…');
+  document.getElementById('runU').disabled = true;
+  const svg = file.name.toLowerCase().endsWith('.svg');
+  const rd = new FileReader();
+  rd.onload  = ev => loadURL(ev.target.result, svg);
+  rd.onerror = () => setStatus('err','READ ERROR');
+  rd.readAsDataURL(file);
+}
+function loadURL(url, isSvg) {
+  const img = new Image();
+  img.onload = () => {
+    const SZ = 640;
+    offCv.width = offCv.height = SZ;
+    offX.fillStyle = isSvg ? '#ffffff' : '#000000';
+    offX.fillRect(0,0,SZ,SZ);
+    const sc = Math.min(SZ/img.width, SZ/img.height);
+    offX.drawImage(img, (SZ-img.width*sc)/2, (SZ-img.height*sc)/2, img.width*sc, img.height*sc);
+    runExtraction(SZ);
+  };
+  img.onerror = () => setStatus('err','LOAD ERROR');
+  img.src = url;
+}
+function runExtraction(SZ) {
+  upSt('extracting boundary…');
+  const imgData = offX.getImageData(0,0,SZ,SZ);
+  setTimeout(() => {
+    const pts = extractBoundary(imgData, SZ, SZ);
+    if (pts.length < 20) { setStatus('err','NO PATH'); upSt('failed'); return; }
+    const mapped = fitCanvas(pts, LW(), LH());
+    S.inputPts = mapped;
+    // Preview on iCanvas (no zoom yet)
+    clearCanvas(iCtx);
+    iCtx.beginPath();
+    iCtx.moveTo(mapped[0].x, mapped[0].y);
+    for (let i=1; i<mapped.length; i++) iCtx.lineTo(mapped[i].x, mapped[i].y);
+    iCtx.lineTo(mapped[0].x, mapped[0].y);
+    iCtx.strokeStyle = document.getElementById('cT').value + 'bb';
+    iCtx.lineWidth = 1.4; iCtx.lineCap = iCtx.lineJoin = 'round';
+    iCtx.stroke();
+    document.getElementById('iPts').textContent = pts.length;
+    document.getElementById('hint').style.opacity = '0';
+    document.getElementById('runU').disabled = false;
+    upSt('boundary · ' + pts.length + ' pts');
+    setStatus('on','IMAGE LOADED — PRESS ▶ RUN');
+  }, 20);
+}
+
+/* ══════════════════════════════════════════════
+   IMAGE PROCESSING
+   Otsu threshold + radial sweep for outer silhouette
+══════════════════════════════════════════════ */
+function otsuThresh(gray, N) {
+  const h = new Float64Array(256);
+  for (let i=0;i<N;i++) h[Math.min(255,gray[i]*255|0)]++;
+  let sum=0; for (let i=0;i<256;i++) sum+=i*h[i];
+  let sb=0,wb=0,best=0,t=0;
+  for (let i=0;i<256;i++) {
+    wb+=h[i]; if(!wb) continue;
+    const wf=N-wb; if(!wf) break;
+    sb+=i*h[i];
+    const v=wb*wf*((sb/wb-(sum-sb)/wf)**2);
+    if (v>best) { best=v; t=i; }
+  }
+  return t/255;
+}
+function extractBoundary(imgData, iw, ih) {
+  const d=imgData.data, gray=new Float32Array(iw*ih);
+  for (let i=0;i<iw*ih;i++) gray[i]=(d[i*4]*0.299+d[i*4+1]*0.587+d[i*4+2]*0.114)/255;
+  const thr=otsuThresh(gray,iw*ih);
+  let bright=0; for (const g of gray) if (g>thr) bright++;
+  const fgBright=bright/gray.length<0.55;
+  const bin=new Uint8Array(iw*ih);
+  for (let i=0;i<gray.length;i++) bin[i]=(fgBright?gray[i]>thr:gray[i]<=thr)?1:0;
+  let cx=0,cy=0,cnt=0;
+  for (let y=0;y<ih;y++) for (let x=0;x<iw;x++) if(bin[y*iw+x]){cx+=x;cy+=y;cnt++;}
+  if(!cnt) return [];
+  cx/=cnt; cy/=cnt;
+  const RAYS=512, pts=[], maxR=Math.ceil(Math.hypot(iw,ih));
+  for (let a=0;a<RAYS;a++) {
+    const ang=(a/RAYS)*2*Math.PI, ca=Math.cos(ang), sa=Math.sin(ang);
+    let fx=Math.round(cx), fy=Math.round(cy), found=false;
+    for (let r=1;r<maxR;r++) {
+      const nx=Math.round(cx+r*ca), ny=Math.round(cy+r*sa);
+      if(nx<0||nx>=iw||ny<0||ny>=ih) break;
+      if(bin[ny*iw+nx]){fx=nx;fy=ny;found=true;}
+    }
+    if(found) pts.push({x:fx,y:fy});
+  }
+  return pts;
+}
+function fitCanvas(pts, cw, ch, mg=0.1) {
+  const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
+  const x0=Math.min(...xs),x1=Math.max(...xs);
+  const y0=Math.min(...ys),y1=Math.max(...ys);
+  const sc=Math.min(cw*(1-2*mg)/(x1-x0||1), ch*(1-2*mg)/(y1-y0||1));
+  const ox=(cw-(x1-x0)*sc)/2, oy=(ch-(y1-y0)*sc)/2;
+  return pts.map(p=>({x:(p.x-x0)*sc+ox, y:(p.y-y0)*sc+oy}));
+}
+
+/* ══════════════════════════════════════════════
+   FFT  —  Cooley-Tukey, complex input, O(N log N)
+   z_n = x_n + i·y_n  →  sorted [{freq,amp,phase}]
+
+   Reconstruction at time t ∈ [0,2π):
+     x(t) = Σ amp·cos(freq·t + phase)
+     y(t) = Σ amp·sin(freq·t + phase)
+══════════════════════════════════════════════ */
+const nxt2 = n => { let p=1; while(p<n) p<<=1; return p; };
+function fftIP(re, im) {
+  const N=re.length;
+  for (let i=1,j=0;i<N;i++) {
+    let bit=N>>1; for(;j&bit;bit>>=1) j^=bit; j^=bit;
+    if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t;}
+  }
+  for (let len=2;len<=N;len<<=1) {
+    const ang=-2*Math.PI/len, wc=Math.cos(ang), ws=Math.sin(ang);
+    for (let i=0;i<N;i+=len) {
+      let wr=1,wi=0;
+      for (let j=0,h=len>>1;j<h;j++) {
+        const ur=re[i+j],ui=im[i+j];
+        const vr=re[i+j+h]*wr-im[i+j+h]*wi, vi=im[i+j+h]*wr+re[i+j+h]*wi;
+        re[i+j]=ur+vr;im[i+j]=ui+vi;re[i+j+h]=ur-vr;im[i+j+h]=ui-vi;
+        const nwr=wr*wc-wi*ws; wi=wr*ws+wi*wc; wr=nwr;
+      }
+    }
+  }
+}
+function computeFFT(pts) {
+  const N=nxt2(pts.length);
+  const re=new Float64Array(N), im=new Float64Array(N);
+  for (let i=0;i<pts.length;i++){re[i]=pts[i].x;im[i]=pts[i].y;}
+  fftIP(re,im);
+  const out=[];
+  for (let k=0;k<N;k++) out.push({
+    freq: k<=N/2?k:k-N,
+    amp:  Math.hypot(re[k],im[k])/N,
+    phase:Math.atan2(im[k],re[k])
+  });
+  return out.sort((a,b)=>b.amp-a.amp);
+}
+
+/* ══════════════════════════════════════════════
+   RESAMPLE  —  uniform arc-length, closed loop
+══════════════════════════════════════════════ */
+function resample(pts, N) {
+  const n=pts.length; if(n<=1) return pts;
+  const lens=new Float64Array(n); let total=0;
+  for (let i=0;i<n;i++){
+    const j=(i+1)%n;
+    lens[i]=Math.hypot(pts[j].x-pts[i].x,pts[j].y-pts[i].y); total+=lens[i];
+  }
+  if(!total) return pts;
+  const cum=new Float64Array(n+1);
+  for (let i=0;i<n;i++) cum[i+1]=cum[i]+lens[i];
+  const out=[]; let seg=0;
+  for (let k=0;k<N;k++) {
+    const tgt=(k/N)*total;
+    while(seg<n-1&&cum[seg+1]<tgt) seg++;
+    const t=lens[seg]>0?(tgt-cum[seg])/lens[seg]:0;
+    const j=(seg+1)%n;
+    out.push({x:pts[seg].x+t*(pts[j].x-pts[seg].x), y:pts[seg].y+t*(pts[j].y-pts[seg].y)});
+  }
+  return out;
+}
+
+/* ══════════════════════════════════════════════
+   OPEN-PATH DETECTION
+   Computes the fraction of the full cycle that
+   represents the REAL drawn path vs the closing
+   phantom segment (which should draw no trail).
+══════════════════════════════════════════════ */
+function computeTrailCutoff(rawPts) {
+  const n = rawPts.length;
+  if (n < 2) return { cutoff: 1, isOpen: false };
+  // Arc length of the drawn path
+  let realLen = 0;
+  for (let i=0;i<n-1;i++)
+    realLen += Math.hypot(rawPts[i+1].x-rawPts[i].x, rawPts[i+1].y-rawPts[i].y);
+  // Closing segment (last → first)
+  const closingLen = Math.hypot(rawPts[0].x-rawPts[n-1].x, rawPts[0].y-rawPts[n-1].y);
+  const OPEN_THRESHOLD = Math.max(20, Math.min(LW(), LH()) * 0.025);
+  if (closingLen < OPEN_THRESHOLD) return { cutoff: 1, isOpen: false };
+  return { cutoff: realLen / (realLen + closingLen), isOpen: true };
+}
+
+/* ══════════════════════════════════════════════
+   START FOURIER
+══════════════════════════════════════════════ */
+function startFourier() {
+  if (!S.inputPts.length) { setStatus('err','NO PATH'); return; }
+  stopAnim(); resetView();
+  setStatus('run','COMPUTING FFT…');
+  document.getElementById('runD').disabled = true;
+  document.getElementById('runU').disabled = true;
+
+  setTimeout(() => {
+    // Compute open-path cutoff from RAW points (before resampling)
+    const { cutoff, isOpen } = computeTrailCutoff(S.inputPts);
+    S.trailCutoff = cutoff;
+    S.isOpen      = isOpen;
+
+    // Resample to 512 pts (closed loop)
+    const uniform = resample(S.inputPts, 512);
+
+    // Centroid → animation origin
+    let cx=0, cy=0;
+    for (const p of uniform) { cx+=p.x; cy+=p.y; }
+    cx /= uniform.length; cy /= uniform.length;
+    S.centroid = {x:cx, y:cy};
+
+    // FFT on centered path
+    S.fourier = computeFFT(uniform.map(p=>({x:p.x-cx, y:p.y-cy})));
+    S.fftN    = nxt2(uniform.length);   // 512
+    S.time    = 0; S.trail = [];
+    S.running = true; S.paused = false;
+
+    document.getElementById('iN').textContent   = S.fftN;
+    document.getElementById('iEpc').textContent = S.fourier.length;
+    document.getElementById('pBtn').disabled    = false;
+    document.getElementById('rBtn').disabled    = false;
+    document.getElementById('eqBtn').disabled   = false;
+    iCv.style.pointerEvents = 'none';
+
+    setStatus('run', isOpen ? 'RUNNING (OPEN PATH)' : 'RUNNING');
+    document.getElementById('hint').textContent  = 'SCROLL TO ZOOM · DRAG TO PAN';
+    document.getElementById('hint').style.opacity = '0.7';
+    animate();
+  }, 30);
+}
+
+/* ══════════════════════════════════════════════
+   EPICYCLE CHAIN  —  compute world positions
+   Returns [{x,y}] array of length (segments+1).
+   [0] = origin,  [k] = tip after k-th epicycle.
+══════════════════════════════════════════════ */
+function buildChain(nEpc, time, minAmp) {
+  const chain = [{x: S.centroid.x, y: S.centroid.y}];
+  let x = S.centroid.x, y = S.centroid.y;
+  for (let i=0; i<nEpc; i++) {
+    const {freq, amp, phase} = S.fourier[i];
+    if (amp < minAmp) continue;
+    const ang = freq*time + phase;
+    x += amp*Math.cos(ang);
+    y += amp*Math.sin(ang);
+    chain.push({x, y, amp, freq, phase, epiIdx: i});
+  }
+  return chain;
+}
+
+/* ══════════════════════════════════════════════
+   ANIMATION LOOP
+══════════════════════════════════════════════ */
+function animate() {
+  if (!S.running) return;
+
+  // ── Read controls ──────────────────────────
+  const nEpc   = Math.min(+document.getElementById('sE').value, S.fourier.length);
+  const speed  = sliderToSpeed();
+  const maxTrl = +document.getElementById('sTl').value;
+  const minAmp = (+document.getElementById('sMn').value / 10) / view.scale;
+  const circOp = +document.getElementById('sCO').value / 100;
+  const circSW = +document.getElementById('sCS').value / 10;
+  const lineW  = +document.getElementById('sLW').value / 10;
+  const showC  = document.getElementById('tSC').checked;
+  const showA  = document.getElementById('tSA').checked;
+  const doFade = document.getElementById('tTF').checked;
+  const showIn = document.getElementById('tSD').checked;
+  const cC     = document.getElementById('cC').value;
+  const cA     = document.getElementById('cA').value;
+  const cT     = document.getElementById('cT').value;
+
+  const dt = (2*Math.PI / S.fftN) * speed;
+
+  // ── Build chain (world coords) ──────────────
+  const chain = buildChain(nEpc, S.time, minAmp);
+  const finalTip = chain[chain.length-1];
+
+  // ── Camera tracking (overrides view.tx/ty) ──
+  const followMode = document.getElementById('followSel').value;
+  if (followMode !== 'off') {
+    let tp;
+    if (followMode === 'tip') {
+      tp = finalTip;
+    } else {
+      const eIdx = Math.min(+document.getElementById('sFE').value, chain.length-1);
+      tp = chain[eIdx] || finalTip;
+    }
+    view.tx = LW()/2 - tp.x * view.scale;
+    view.ty = LH()/2 - tp.y * view.scale;
+  }
+
+  // ── Clear both canvases ──────────────────────
+  clearCanvas(fCtx);
+  clearCanvas(iCtx);
+
+  // ── Draw input path on iCanvas (with zoom) ──
+  // BUG FIX: input path now follows the same zoom/pan as the Fourier canvas
+  if (showIn && S.inputPts.length > 1) drawInputPath();
+
+  // ── Apply zoom/pan to fCanvas ────────────────
+  fCtx.save();
+  applyViewCtx(fCtx);
+
+  // ── Draw circles and arrows ─────────────────
+  const circAlpHex = Math.round(circOp*255).toString(16).padStart(2,'0');
+  for (let i=0; i<chain.length-1; i++) {
+    const from = chain[i], to = chain[i+1];
+    const amp  = to.amp;
+    const isTrackedEpi = (followMode==='epi' &&
+      +document.getElementById('sFE').value === i+1);
+
+    // Orbit circle
+    if (showC) {
+      fCtx.beginPath();
+      fCtx.arc(from.x, from.y, amp, 0, 2*Math.PI);
+      fCtx.strokeStyle = isTrackedEpi ? (cC+'ff') : (cC+circAlpHex);
+      fCtx.lineWidth   = (isTrackedEpi ? circSW*2 : circSW) / view.scale;
+      fCtx.stroke();
+    }
+
+    // Arrow shaft
+    if (showA) {
+      fCtx.beginPath();
+      fCtx.moveTo(from.x, from.y);
+      fCtx.lineTo(to.x, to.y);
+      fCtx.strokeStyle = isTrackedEpi ? (cA+'ff') : (cA+'cc');
+      fCtx.lineWidth   = lineW / view.scale;
+      fCtx.stroke();
+
+      // Arrowhead
+      if (amp > minAmp*4) {
+        const dir = Math.atan2(to.y-from.y, to.x-from.x);
+        const al  = Math.min(8, amp*0.38);
+        fCtx.beginPath();
+        fCtx.moveTo(to.x, to.y);
+        fCtx.lineTo(to.x-al*Math.cos(dir-0.38), to.y-al*Math.sin(dir-0.38));
+        fCtx.lineTo(to.x-al*Math.cos(dir+0.38), to.y-al*Math.sin(dir+0.38));
+        fCtx.closePath();
+        fCtx.fillStyle = isTrackedEpi ? (cA+'ff') : (cA+'cc');
+        fCtx.fill();
+      }
+    }
+  }
+
+  // ── Trail ────────────────────────────────────
+  const tl = S.trail.length;
+  if (tl > 1) {
+    const tw = lineW*1.5 / view.scale;
+    if (doFade && tl > 80) {
+      const SEG=8;
+      for (let s=0;s<SEG;s++) {
+        const si=Math.floor((s/SEG)*tl), ei=Math.floor(((s+1)/SEG)*tl);
+        if (ei<=si) continue;
+        const a=Math.round(18+s*31).toString(16).padStart(2,'0');
+        fCtx.beginPath();
+        fCtx.moveTo(S.trail[si].x, S.trail[si].y);
+        for (let i=si+1;i<=ei&&i<tl;i++) fCtx.lineTo(S.trail[i].x, S.trail[i].y);
+        fCtx.strokeStyle = cT+a;
+        fCtx.lineWidth   = tw*(0.55+s*0.08);
+        fCtx.lineJoin = fCtx.lineCap = 'round';
+        fCtx.stroke();
+      }
+    } else {
+      fCtx.beginPath();
+      fCtx.moveTo(S.trail[0].x, S.trail[0].y);
+      for (let i=1;i<tl;i++) fCtx.lineTo(S.trail[i].x, S.trail[i].y);
+      fCtx.strokeStyle = cT+'dd';
+      fCtx.lineWidth   = tw;
+      fCtx.lineJoin = fCtx.lineCap = 'round';
+      fCtx.stroke();
+    }
+  }
+
+  // Draw a dot at the trail tip for the tracked tip mode
+  if (followMode === 'tip' && finalTip) {
+    fCtx.beginPath();
+    fCtx.arc(finalTip.x, finalTip.y, 4/view.scale, 0, 2*Math.PI);
+    fCtx.fillStyle = cT+'ff';
+    fCtx.fill();
+  }
+
+  fCtx.restore();
+
+  // ── Advance time & trail (not when paused) ──
+  if (!S.paused) {
+    // OPEN-PATH TRAIL FIX:
+    // Only add to trail while we are in the "real" drawn segment.
+    // When the animation is in the phantom return segment, stop adding
+    // new trail points (but keep existing trail visible).
+    const cycleFrac = S.time / (2*Math.PI);
+    if (!S.isOpen || cycleFrac < S.trailCutoff) {
+      S.trail.push({x: finalTip.x, y: finalTip.y});
+    }
+    if (S.trail.length > maxTrl) S.trail.shift();
+    S.time += dt;
+    if (S.time >= 2*Math.PI) { S.time = 0; S.trail = []; }
+    document.getElementById('iProg').textContent =
+      Math.min(100, (S.time/(2*Math.PI)*100)|0) + '%';
+  }
+
+  S.animId = requestAnimationFrame(animate);
+}
+
+/* ══════════════════════════════════════════════
+   CONTROLS
+══════════════════════════════════════════════ */
+function togglePause() {
+  S.paused = !S.paused;
+  document.getElementById('pBtn').textContent = S.paused ? '▶ Resume' : '⏸ Pause';
+  setStatus(S.paused ? 'on' : 'run', S.paused ? 'PAUSED' : 'RUNNING');
+}
+function restartAnim() {
+  S.time=0; S.trail=[];
+  S.paused=false;
+  document.getElementById('pBtn').textContent='⏸ Pause';
+  setStatus('run','RUNNING');
+}
+function stopAnim() {
+  cancelAnimationFrame(S.animId);
+  S.running=false; S.paused=false;
+  clearCanvas(fCtx); clearCanvas(iCtx);
+  S.trail=[]; S.time=0;
+}
+function clearFourier() {
+  stopAnim();
+  S.fourier=[]; S.fftN=0;
+  document.getElementById('pBtn').disabled=true;
+  document.getElementById('rBtn').disabled=true;
+  document.getElementById('eqBtn').disabled=true;
+  document.getElementById('iN').textContent='—';
+  document.getElementById('iEpc').textContent='—';
+  document.getElementById('iProg').textContent='0%';
+}
+function clearAll() {
+  clearFourier();
+  S.inputPts=[];
+  clearCanvas(iCtx);
+  iCv.style.pointerEvents = S.tab==='draw' ? 'auto' : 'none';
+  document.getElementById('runD').disabled=true;
+  document.getElementById('runU').disabled=true;
+  document.getElementById('iPts').textContent='0';
+  document.getElementById('hint').style.opacity='1';
+  document.getElementById('hint').textContent='DRAW YOUR PATH — MOUSE OR TOUCH';
+  resetView();
+  setStatus('','IDLE — DRAW OR UPLOAD');
+  upSt('');
+}
+
+// Show/hide original drawing toggle
+function onToggleInput() {
+  if (!S.running && !S.paused) {
+    // Not animating: redraw normally or clear
+    const show = document.getElementById('tSD').checked;
+    clearCanvas(iCtx);
+    if (show && S.inputPts.length > 1) {
+      const pts = S.inputPts;
+      iCtx.beginPath();
+      iCtx.moveTo(pts[0].x, pts[0].y);
+      for (let i=1;i<pts.length;i++) iCtx.lineTo(pts[i].x, pts[i].y);
+      iCtx.strokeStyle = document.getElementById('cT').value + 'bb';
+      iCtx.lineWidth = 1.8; iCtx.stroke();
+    }
+  }
+  // During animation: animate() already reads the toggle each frame
+}
+
+// Follow mode
+function onFollowChange() {
+  const mode = document.getElementById('followSel').value;
+  document.getElementById('epiRow').style.display = mode==='epi' ? 'block' : 'none';
+  document.getElementById('trackRing').classList.toggle('vis', mode !== 'off');
+}
+
+/* ══════════════════════════════════════════════
+   FOURIER EQUATION MODAL
+══════════════════════════════════════════════ */
+function openEqModal() {
+  if (!S.fourier.length) return;
+  const N = S.fftN;
+  const top = S.fourier.slice(0, 60);
+  const total = S.fourier.reduce((s,c)=>s+c.amp,0);
+
+  // Formula block
+  document.getElementById('eqFormula').innerHTML =
+`<span style="color:var(--acc)">z(t)</span> = Σ Aₙ · exp(i·(fₙ·t + φₙ))
+
+<span style="color:var(--dim)">where</span>  t ∈ [0, 2π)
+       N = ${N}  total FFT components
+       Σ Aₙ = ${total.toFixed(2)} px  (sum of all amplitudes)
+
+<span style="color:var(--acc)">x(t)</span> = Σ Aₙ · cos(fₙ·t + φₙ)
+<span style="color:var(--acc)">y(t)</span> = Σ Aₙ · sin(fₙ·t + φₙ)`;
+
+  // Table
+  let rows = `<tr><th>#</th><th>Freq</th><th>Amplitude (px)</th><th>Phase (rad)</th><th>Rotation</th><th>% Power</th></tr>`;
+  top.forEach((c,i) => {
+    const dir = c.freq===0 ? 'DC·offset' : c.freq>0 ? '↺ CCW' : '↻ CW';
+    const pct = (c.amp/total*100).toFixed(2);
+    rows += `<tr><td>${i+1}</td><td>${c.freq>=0?'+':''}${c.freq}</td>
+      <td>${c.amp.toFixed(4)}</td><td>${c.phase.toFixed(5)}</td>
+      <td>${dir}</td><td>${pct}%</td></tr>`;
+  });
+  if (S.fourier.length>60) rows+=`<tr><td colspan="6" style="color:var(--dim);text-align:center">
+    …and ${S.fourier.length-60} more</td></tr>`;
+  document.getElementById('eqTable').innerHTML = rows;
+  document.getElementById('eqOverlay').classList.add('vis');
+}
+function closeEqModal() {
+  document.getElementById('eqOverlay').classList.remove('vis');
+}
+function copyEqText() {
+  if (!S.fourier.length) return;
+  const lines = ['z(t) = Σ Aₙ·exp(i·(fₙ·t + φₙ))', '',
+    'Rank  Freq    Amplitude     Phase(rad)   Rotation',
+    '----  ------  ------------  -----------  ---------'];
+  S.fourier.slice(0,60).forEach((c,i) => {
+    const dir = c.freq===0?'DC':c.freq>0?'CCW':'CW';
+    lines.push(
+      `${String(i+1).padStart(4)}  ${String(c.freq).padStart(6)}  ` +
+      `${c.amp.toFixed(5).padStart(12)}  ${c.phase.toFixed(5).padStart(11)}  ${dir}`
+    );
+  });
+  navigator.clipboard.writeText(lines.join('\n')).catch(()=>{});
+}
+// Close modal on backdrop click
+document.getElementById('eqOverlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('eqOverlay')) closeEqModal();
+});
+
+/* ══════════════════════════════════════════════
+   UTILITIES
+══════════════════════════════════════════════ */
+function setStatus(t, msg) {
+  document.getElementById('sDot').className = 'dot' + (t?' '+t:'');
+  document.getElementById('sTxt').textContent = msg;
+}
+function upSt(t) { document.getElementById('upSt').textContent = t; }
+</script>
+</body>
+</html>
