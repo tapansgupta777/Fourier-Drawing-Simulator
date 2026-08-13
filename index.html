@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fourier Drawing Machine</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Dancing+Script:wght@400;700&family=Pacifico&family=Caveat:wght@400;700&family=Satisfy&family=Great+Vibes&family=Sacramento&family=Alex+Brush&family=Lobster&family=Courgette&family=Cookie&family=Yellowtail&family=Kaushan+Script&family=Permanent+Marker&family=Indie+Flower&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f4f0e5;--surf:#ece7d5;--brd:#cec6ae;--acc:#1c3878;--a2:#781428;--a3:#7a4c14;
+  --fg:#18140c;--dim:#7a7060;--cbg:#e8e2ce;--grid:rgba(28,56,120,.034);
+  --glow:0 0 15px rgba(28,56,120,.27);--g2:0 0 15px rgba(120,20,40,.27);--fs:.78rem;}
+[data-theme="dark"]{--bg:#07070e;--surf:#0d0d1e;--brd:#1e1e3a;--acc:#7090e0;--a2:#d84070;--a3:#c8a030;
+  --fg:#d6d2ec;--dim:#484068;--cbg:#05050c;--grid:rgba(112,144,224,.02);
+  --glow:0 0 15px rgba(112,144,224,.5);--g2:0 0 15px rgba(216,64,112,.5);}
+*{margin:0;padding:0;box-sizing:border-box}html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--fg);font-family:'Share Tech Mono',monospace;font-size:var(--fs);display:flex;flex-direction:column;transition:background .3s,color .3s}
+.scanline{position:fixed;inset:0;pointer-events:none;z-index:9999;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.04) 2px,rgba(0,0,0,.04) 4px);opacity:0;transition:opacity .3s}
+[data-theme="dark"] .scanline{opacity:1}
+.app{height:100%;display:grid;grid-template-columns:272px 1fr;gap:.46rem;padding:.46rem;transition:grid-template-columns .32s}
+.app.sb-off{grid-template-columns:0px 1fr}
+@media(max-width:640px){html,body{overflow:auto}.app{grid-template-columns:1fr!important;height:auto}.sidebar{order:2}.main-area{order:1;min-height:70vw}}
+.sidebar{display:flex;flex-direction:column;gap:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--brd) transparent;transition:opacity .28s}
+.app.sb-off .sidebar{opacity:0;pointer-events:none}
+.panel-tab{background:var(--surf);border:1px solid var(--brd);border-bottom:none;padding:.3rem .78rem;font-family:'Orbitron',sans-serif;font-size:.48rem;letter-spacing:.18em;color:var(--acc);flex-shrink:0;position:relative;display:inline-flex;align-items:center;gap:.5rem}
+.panel-tab::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,var(--acc),transparent)}
+.panel-tab .ptd{width:5px;height:5px;border-radius:50%;background:var(--acc);box-shadow:0 0 4px var(--acc);flex-shrink:0}
+.pg{height:.42rem}
+.panel{background:var(--surf);border:1px solid var(--brd);padding:.68rem .76rem;position:relative;flex-shrink:0;transition:background .3s,border-color .3s}
+.panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,var(--acc),transparent)}
+.pt{font-family:'Orbitron',sans-serif;font-size:.52rem;letter-spacing:.24em;color:var(--acc);margin-bottom:.55rem;text-transform:uppercase}
+.tab-row{display:grid;gap:3px;margin-bottom:.55rem}
+.t2{grid-template-columns:1fr 1fr}.t3{grid-template-columns:1fr 1fr 1fr}
+.tb{background:transparent;border:1px solid var(--brd);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:var(--fs);padding:.35rem;cursor:pointer;letter-spacing:.05em;transition:all .15s;text-align:center}
+.tb.active{background:color-mix(in srgb,var(--acc) 13%,transparent);border-color:var(--acc);color:var(--acc);box-shadow:var(--glow)}
+.tb:hover:not(.active){border-color:var(--dim);color:var(--fg)}
+.tc{display:none}.tc.active{display:block}
+.uzone{border:1px dashed var(--dim);padding:.8rem .5rem;text-align:center;cursor:pointer;transition:all .2s;position:relative}
+.uzone:hover,.uzone.over{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 5%,transparent)}
+.uzone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.uzone p{font-size:.65rem;color:var(--dim);line-height:1.65}
+.ctrl{margin-bottom:.46rem}
+.ctrl label{display:flex;justify-content:space-between;align-items:center;font-size:var(--fs);color:var(--dim);margin-bottom:.2rem;letter-spacing:.05em}
+.ctrl label span{color:var(--acc)}
+.lbl-btn{background:var(--bg);border:1px solid var(--brd);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.46rem;padding:.08rem .28rem;cursor:pointer;letter-spacing:.07em;margin-left:.2rem;transition:all .15s}
+.lbl-btn:hover{border-color:var(--acc);color:var(--acc)}
+input[type=range]{width:100%;-webkit-appearance:none;height:4px;background:var(--brd);outline:none;cursor:pointer;border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--acc);box-shadow:0 0 5px var(--acc);cursor:pointer}
+.num-ctrl{display:flex;align-items:center;gap:.18rem;margin-bottom:.2rem}
+.num-ctrl input[type=number]{flex:1;min-width:0;background:var(--bg);border:1px solid var(--brd);color:var(--fg);font-family:'Share Tech Mono',monospace;font-size:var(--fs);padding:.2rem .28rem;text-align:center;outline:none;-moz-appearance:textfield;transition:border-color .15s}
+.num-ctrl input[type=number]:focus{border-color:var(--acc)}
+.num-ctrl input[type=number]::-webkit-inner-spin-button,.num-ctrl input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none}
+.num-ctrl .sb{background:var(--surf);border:1px solid var(--brd);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.58rem;width:22px;height:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;padding:0;user-select:none}
+.num-ctrl .sb:hover{border-color:var(--acc);color:var(--acc)}
+.num-ctrl .sbw{width:30px;font-size:.52rem}
+.tinput{width:100%;background:var(--bg);border:1px solid var(--brd);color:var(--fg);font-family:'Share Tech Mono',monospace;font-size:var(--fs);padding:.35rem .48rem;outline:none;transition:border-color .2s;margin-bottom:.38rem}
+.tinput:focus{border-color:var(--acc)}
+select{background:var(--surf);border:1px solid var(--brd);color:var(--fg);font-family:'Share Tech Mono',monospace;font-size:var(--fs);padding:.3rem .42rem;cursor:pointer;width:100%;outline:none;margin-bottom:.38rem}
+/* Font preview box */
+.font-prev{border:1px solid var(--brd);padding:.3rem .5rem;text-align:center;color:var(--acc);margin-bottom:.38rem;min-height:2.1rem;line-height:1.2;font-size:1.1rem;transition:font-family .3s,background .3s}
+.crow{display:flex;align-items:center;gap:.38rem;margin-bottom:.34rem}
+.crow label{font-size:var(--fs);color:var(--dim);flex:1;letter-spacing:.05em}
+input[type=color]{width:26px;height:16px;border:1px solid var(--brd);background:transparent;cursor:pointer;padding:0}
+.trow{display:flex;align-items:center;justify-content:space-between;margin-bottom:.33rem;font-size:var(--fs);color:var(--dim)}
+.pill{position:relative;width:36px;height:19px;cursor:pointer;flex-shrink:0}
+.pill input{opacity:0;width:0;height:0;position:absolute}
+.pill-tr{position:absolute;inset:0;background:var(--brd);border-radius:10px;transition:background .2s}
+.pill-dt{position:absolute;top:3px;left:3px;width:13px;height:13px;background:var(--dim);border-radius:50%;transition:all .2s}
+.pill input:checked~.pill-tr{background:var(--acc)}.pill input:checked~.pill-dt{left:20px;background:#fff}
+.btn{background:transparent;border:1px solid var(--acc);color:var(--acc);font-family:'Share Tech Mono',monospace;font-size:var(--fs);padding:.42rem;cursor:pointer;letter-spacing:.09em;text-transform:uppercase;transition:all .15s;width:100%;margin-bottom:.3rem;display:block}
+.btn:hover{background:color-mix(in srgb,var(--acc) 12%,transparent);box-shadow:var(--glow)}
+.btn.pri{background:color-mix(in srgb,var(--acc) 10%,transparent)}
+.btn.danger{border-color:var(--a2);color:var(--a2)}
+.btn.danger:hover{background:color-mix(in srgb,var(--a2) 11%,transparent);box-shadow:var(--g2)}
+.btn:disabled{opacity:.2;cursor:not-allowed;pointer-events:none}
+.srow{display:flex;align-items:center;margin-top:.52rem}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--dim);margin-right:.38rem;flex-shrink:0}
+.dot.on{background:var(--acc);box-shadow:0 0 4px var(--acc)}
+.dot.run{background:var(--a3);box-shadow:0 0 4px var(--a3);animation:blink .7s infinite}
+.dot.err{background:var(--a2);box-shadow:0 0 4px var(--a2)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.12}}
+.stxt{font-size:var(--fs);color:var(--dim);letter-spacing:.04em}
+.main-area{display:flex;flex-direction:column;gap:0;min-height:0}
+.zbar{position:absolute;top:.5rem;right:.5rem;z-index:20;display:flex;align-items:center;gap:.16rem}
+.zbtn{background:var(--surf);border:1px solid var(--brd);color:var(--fg);font-family:'Share Tech Mono',monospace;font-size:.68rem;width:25px;height:21px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;letter-spacing:0;transition:all .15s}
+.zbtn:hover{border-color:var(--acc);color:var(--acc);box-shadow:var(--glow)}
+.zlbl{background:var(--surf);border:1px solid var(--brd);font-size:.5rem;color:var(--dim);padding:0 .36rem;height:21px;display:flex;align-items:center;letter-spacing:.07em;min-width:46px;justify-content:center}
+.zsep{width:1px;height:14px;background:var(--brd);margin:0 .08rem}
+.cwrap{position:relative;background:var(--cbg);border:1px solid var(--brd);flex:1;min-height:0;overflow:hidden;transition:background .3s,border-color .3s}
+.cwrap::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;background:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:52px 52px}
+canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+#iCv{z-index:2}#fCv{z-index:3;pointer-events:none}
+.hint{position:absolute;bottom:.65rem;left:50%;transform:translateX(-50%);font-size:.48rem;color:var(--dim);letter-spacing:.16em;pointer-events:none;z-index:10;transition:opacity .8s;white-space:nowrap;opacity:0}
+.cwrap.panning{cursor:grab}
+.tring{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:18px;height:18px;border:2px solid var(--a3);border-radius:50%;pointer-events:none;z-index:15;display:none}
+.tring.vis{display:block;animation:tpulse 1.5s infinite}
+@keyframes tpulse{0%,100%{opacity:.7;transform:translate(-50%,-50%) scale(1)}50%{opacity:.3;transform:translate(-50%,-50%) scale(1.6)}}
+/* Transparent info bar — fix #4 */
+.ibar{display:flex;gap:.2rem;flex-wrap:wrap;flex-shrink:0;padding:.15rem .46rem;background:transparent}
+.chip{background:transparent;border:none;padding:.15rem .35rem;font-size:.54rem;color:var(--dim);letter-spacing:.05em}
+.chip strong{color:var(--acc);font-weight:normal}
+/* Equation modal */
+.eq-ov{position:fixed;inset:0;z-index:2000;overflow:auto;background:rgba(0,0,0,.8);display:none}
+[data-theme="light"] .eq-ov{background:rgba(0,0,0,.52)}
+.eq-ov.vis{display:block}
+.eq-box{max-width:700px;margin:1.4rem auto;background:var(--surf);border:1px solid var(--brd);padding:1.25rem 1.35rem;position:relative}
+.eq-box::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,var(--acc),transparent)}
+.eq-x{position:absolute;top:.65rem;right:.7rem;background:transparent;border:1px solid var(--brd);color:var(--dim);width:22px;height:22px;cursor:pointer;font-size:.75rem;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.eq-x:hover{border-color:var(--acc);color:var(--acc)}
+.eq-ttl{font-family:'Orbitron',sans-serif;font-size:.66rem;letter-spacing:.18em;color:var(--acc);margin-bottom:.85rem}
+.eq-tabs{display:flex;gap:3px;margin-bottom:.85rem}
+.eq-tb{flex:1;background:transparent;border:1px solid var(--brd);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.6rem;padding:.3rem;cursor:pointer;text-align:center;letter-spacing:.06em;transition:all .15s}
+.eq-tb.active{border-color:var(--acc);color:var(--acc);background:color-mix(in srgb,var(--acc) 10%,transparent)}
+.eq-pane{display:none}.eq-pane.active{display:block}
+.eq-code{font-family:'Share Tech Mono',monospace;font-size:.63rem;color:var(--fg);line-height:1.9;padding:.72rem;background:var(--bg);border:1px solid var(--brd);margin-bottom:.55rem}
+.eq-tbl{width:100%;border-collapse:collapse;font-size:.59rem}
+.eq-tbl th{color:var(--acc);padding:.27rem .44rem;border-bottom:1px solid var(--brd);text-align:left;letter-spacing:.09em;font-weight:normal}
+.eq-tbl td{padding:.24rem .44rem;border-bottom:1px solid color-mix(in srgb,var(--brd) 50%,transparent);color:var(--dim)}
+.eq-tbl td:first-child{color:var(--fg)}
+.eq-tbl tr:hover td{background:color-mix(in srgb,var(--acc) 5%,transparent)}
+#specCv{width:100%;height:88px;display:block;margin:.55rem 0}
+.exp-code{font-family:'Share Tech Mono',monospace;font-size:.54rem;color:var(--dim);background:var(--bg);border:1px solid var(--brd);padding:.55rem;white-space:pre-wrap;word-break:break-all;max-height:110px;overflow-y:auto;margin-bottom:.45rem;line-height:1.5}
+.eq-cta{display:flex;gap:.38rem;margin-top:.45rem}
+.cta-btn{flex:1;font-size:.56rem;padding:.34rem;letter-spacing:.08em;margin-bottom:0}
+/* Seek slider section */
+.seek-section{display:none}
+.seek-section.vis{display:block}
+</style>
+</head>
+<body>
+<div class="scanline"></div>
+<div class="app" id="app">
+  <div class="sidebar">
+    <div class="panel-tab"><span class="ptd"></span>FOURIER DRAWING MACHINE</div>
+    <div class="panel" style="border-top:none">
+      <div class="pt">// Input Mode</div>
+      <div class="tab-row t3">
+        <button class="tb active" id="tdBtn" onclick="switchTab('draw')">✏ Draw</button>
+        <button class="tb" id="tuBtn" onclick="switchTab('upload')">⬆ Image</button>
+        <button class="tb" id="ttBtn" onclick="switchTab('text')">Aa Text</button>
+      </div>
+      <div id="tc-draw" class="tc active">
+        <p style="font-size:.63rem;color:var(--dim);line-height:1.62;margin-bottom:.46rem">Freehand any path. Try to close the loop back to your start.</p>
+        <button class="btn" onclick="clearAll()">⟳ Clear</button>
+        <button class="btn pri" id="runD" onclick="startFourier()" disabled>▶ Run Fourier</button>
+      </div>
+      <div id="tc-upload" class="tc">
+        <div class="uzone" id="uzone">
+          <input type="file" id="fInput" accept="image/*,image/svg+xml" onchange="handleFile(event)">
+          <p>⬆<br>PNG · JPG · SVG<br>drop or click</p>
+        </div>
+        <div class="ctrl" style="margin-top:.42rem">
+          <label>Mode</label>
+          <select id="extMode">
+            <option value="lineart" selected>Line Art — trace strokes</option>
+            <option value="sil">Silhouette — outer boundary</option>
+          </select>
+        </div>
+        <div id="upSt" style="font-size:.58rem;color:var(--dim);min-height:.82em;letter-spacing:.05em"></div>
+        <button class="btn pri" id="runU" onclick="startFourier()" disabled>▶ Run Fourier</button>
+      </div>
+      <div id="tc-text" class="tc">
+        <input class="tinput" type="text" id="textIn" value="Hello" placeholder="Type text…">
+        <!-- Font selector with preview -->
+        <select id="fontSel" onchange="updateFontPrev()">
+          <option value="'Dancing Script',cursive">Dancing Script ✦</option>
+          <option value="'Great Vibes',cursive">Great Vibes ✦</option>
+          <option value="Satisfy,cursive">Satisfy ✦</option>
+          <option value="Pacifico,cursive">Pacifico ✦</option>
+          <option value="Caveat,cursive" selected>Caveat ✦</option>
+          <option value="Sacramento,cursive">Sacramento ✦</option>
+          <option value="'Alex Brush',cursive">Alex Brush ✦</option>
+          <option value="Lobster,cursive">Lobster ✦</option>
+          <option value="Courgette,cursive">Courgette ✦</option>
+          <option value="Cookie,cursive">Cookie ✦</option>
+          <option value="Yellowtail,cursive">Yellowtail ✦</option>
+          <option value="'Kaushan Script',cursive">Kaushan Script ✦</option>
+          <option value="'Permanent Marker',cursive">Permanent Marker ✦</option>
+          <option value="'Indie Flower',cursive">Indie Flower ✦</option>
+          <option value="Georgia,serif">Georgia (serif)</option>
+          <option value="Impact,sans-serif">Impact (bold)</option>
+          <option value="'Courier New',monospace">Courier (mono)</option>
+          <option value="Arial,sans-serif">Arial (sans)</option>
+          <option value="'Orbitron',sans-serif">Orbitron (geo)</option>
+        </select>
+        <!-- Font preview in selected typeface -->
+        <div class="font-prev" id="fontPrev">Caveat</div>
+        <div class="ctrl">
+          <label>Font Size <span id="vFS">220</span>px <span id="vFSa" style="font-size:.55rem;color:var(--dim)"></span></label>
+          <input type="range" id="sFS" min="60" max="500" value="220" oninput="document.getElementById('vFS').textContent=this.value;document.getElementById('vFSa').textContent=''">
+        </div>
+        <div class="ctrl" style="margin-bottom:.38rem">
+          <label>Render as</label>
+          <select id="renderMode" style="margin-bottom:0">
+            <option value="fill">Filled — crisp outlines</option>
+            <option value="stroke" selected>Stroke — continuous lines ✦</option>
+          </select>
+        </div>
+        <button class="btn" onclick="processText()" style="margin-top:.1rem">→ Convert to Path</button>
+        <button class="btn pri" id="runT" onclick="startFourier()" disabled>▶ Run Fourier</button>
+      </div>
+    </div>
+
+    <div class="pg"></div>
+    <div class="panel">
+      <div class="pt">// Parameters</div>
+      <div class="ctrl">
+        <label>Epicycles <span id="vE">200</span></label>
+        <input type="range" id="sE" min="1" max="4096" value="200" oninput="document.getElementById('vE').textContent=this.value">
+      </div>
+      <div class="ctrl">
+        <label>FFT Resolution <span id="vFR">1024 pts</span></label>
+        <input type="range" id="sFR" min="0" max="3" step="1" value="1" oninput="onFftRes()">
+      </div>
+      <div class="ctrl">
+        <label>Speed <span id="vSp">1.00×</span></label>
+        <input type="range" id="sSp" min="0" max="100" value="80" oninput="syncSpd()">
+      </div>
+      <div class="ctrl">
+        <label>
+          Trail Length <span id="vTl">18000</span>
+          <button class="lbl-btn" onclick="autoTrail()" title="Auto-set for ~1 full cycle">AUTO</button>
+        </label>
+        <input type="range" id="sTl" min="100" max="100000" step="100" value="18000" oninput="document.getElementById('vTl').textContent=this.value">
+      </div>
+      <div class="ctrl">
+        <label>Min Radius <span id="vMn">0.5px</span></label>
+        <input type="range" id="sMn" min="1" max="80" value="5" oninput="document.getElementById('vMn').textContent=(this.value/10).toFixed(1)+'px'">
+      </div>
+    </div>
+
+    <div class="pg"></div>
+    <div class="panel">
+      <div class="pt">// Visuals</div>
+      <div class="crow"><label>CIRCLES</label><input type="color" id="cC" value="#1c3878"></div>
+      <div class="crow"><label>ARROWS</label><input type="color" id="cA" value="#7a4c14"></div>
+      <div class="crow"><label>TRAIL</label><input type="color" id="cT" value="#78122a"></div>
+      <div class="ctrl" style="margin-top:.36rem">
+        <label>Circle Opacity <span id="vCO">28%</span></label>
+        <input type="range" id="sCO" min="3" max="95" value="28" oninput="document.getElementById('vCO').textContent=this.value+'%'">
+      </div>
+      <div class="ctrl">
+        <label>Circle Stroke <span id="vCS">0.7</span></label>
+        <input type="range" id="sCS" min="2" max="50" value="7" oninput="document.getElementById('vCS').textContent=(this.value/10).toFixed(1)">
+      </div>
+      <div class="ctrl">
+        <label>Arrow/Trail Weight <span id="vLW">1.2</span></label>
+        <input type="range" id="sLW" min="3" max="45" value="12" oninput="document.getElementById('vLW').textContent=(this.value/10).toFixed(1)">
+      </div>
+      <div class="trow"><span>Circles</span><label class="pill"><input type="checkbox" id="tSC" checked><div class="pill-tr"></div><div class="pill-dt"></div></label></div>
+      <div class="trow"><span>Arrows</span><label class="pill"><input type="checkbox" id="tSA" checked><div class="pill-tr"></div><div class="pill-dt"></div></label></div>
+      <div class="trow"><span>Trail Fade</span><label class="pill"><input type="checkbox" id="tTF" checked><div class="pill-tr"></div><div class="pill-dt"></div></label></div>
+      <div class="trow"><span>Show Original</span><label class="pill"><input type="checkbox" id="tSD" checked><div class="pill-tr"></div><div class="pill-dt"></div></label></div>
+    </div>
+
+    <div class="pg"></div>
+    <div class="panel">
+      <div class="pt">// Camera · Track</div>
+      <div class="ctrl">
+        <label>Follow Mode</label>
+        <select id="followSel" onchange="onFollow()">
+          <option value="off">Off — free pan / zoom</option>
+          <option value="tip">✦ Track Trail Tip</option>
+          <option value="epi">⊙ Track Epicycle #N</option>
+        </select>
+      </div>
+      <div class="ctrl" id="epiRow" style="display:none">
+        <label>Epicycle #</label>
+        <div class="num-ctrl">
+          <button class="sb sbw" onclick="adjFE(-10)">−10</button>
+          <button class="sb" onclick="adjFE(-1)">−</button>
+          <input type="number" id="nFE" min="1" max="4096" value="1" onchange="syncFE('n')">
+          <button class="sb" onclick="adjFE(1)">+</button>
+          <button class="sb sbw" onclick="adjFE(10)">+10</button>
+        </div>
+        <input type="range" id="sFE" min="1" max="4096" value="1" oninput="syncFE('r')">
+      </div>
+      <!-- Toggle for tracking visual indicators — fix #3 -->
+      <div class="trow"><span>Track Highlight Ring</span><label class="pill"><input type="checkbox" id="tTR" checked><div class="pill-tr"></div><div class="pill-dt"></div></label></div>
+      <div class="trow"><span>Centre Pulse Ring</span><label class="pill"><input type="checkbox" id="tCR" checked><div class="pill-tr"></div><div class="pill-dt"></div></label></div>
+    </div>
+
+    <div class="pg"></div>
+    <div class="panel">
+      <div class="pt">// Controls</div>
+      <!-- Cycle seek slider — fix #5 -->
+      <div class="seek-section" id="seekSection">
+        <div class="ctrl">
+          <label>Cycle Position <span id="vCycPct">0%</span></label>
+          <div class="num-ctrl" style="margin-bottom:.22rem">
+            <button class="sb sbw" onclick="adjCycle(-10)">−10%</button>
+            <button class="sb sbw" onclick="adjCycle(-1)">−1%</button>
+            <div style="flex:1"></div>
+            <button class="sb sbw" onclick="adjCycle(1)">+1%</button>
+            <button class="sb sbw" onclick="adjCycle(10)">+10%</button>
+          </div>
+          <input type="range" id="sCyc" min="0" max="100" step="0.1" value="0" oninput="seekCycle(this.value)">
+        </div>
+        <div style="height:.32rem;border-bottom:1px solid var(--brd);margin-bottom:.32rem"></div>
+      </div>
+      <button class="btn" id="pBtn" onclick="togglePause()" disabled>⏸ Pause</button>
+      <button class="btn" id="rBtn" onclick="restartAnim()" disabled>⟳ Restart</button>
+      <button class="btn" id="eqBtn" onclick="openEq()" disabled>∑ Fourier Equation</button>
+      <button class="btn danger" onclick="clearAll()">✕ Full Reset</button>
+      <div class="srow"><div class="dot" id="sDot"></div><span class="stxt" id="sTxt">IDLE</span></div>
+    </div>
+  </div>
+
+  <div class="main-area">
+    <div class="cwrap" id="cwrap">
+      <canvas id="iCv"></canvas><canvas id="fCv"></canvas>
+      <div class="zbar">
+        <button class="zbtn" onclick="zStep(1.22)" title="Zoom in">+</button>
+        <div class="zlbl" id="zlbl">100%</div>
+        <button class="zbtn" onclick="zStep(1/1.22)" title="Zoom out">−</button>
+        <button class="zbtn" onclick="resetV()" title="Reset view">⊙</button>
+        <div class="zsep"></div>
+        <button class="zbtn" onclick="toggleSB()" title="Toggle sidebar">☰</button>
+        <button class="zbtn" id="thBtn" onclick="toggleTheme()" title="Light/dark">🌙</button>
+      </div>
+      <div class="tring" id="tring"></div>
+      <div class="hint" id="hint"></div><!-- no default text, appears briefly -->
+    </div>
+    <!-- Transparent info bar — fix #4 -->
+    <div class="ibar">
+      <div class="chip">INPUT <strong id="iPts">0</strong> pts</div>
+      <div class="chip">FFT-N <strong id="iN">—</strong></div>
+      <div class="chip">EPICS <strong id="iEpc">—</strong></div>
+      <div class="chip">CYCLE <strong id="iProg">0%</strong></div>
+      <div class="chip">ZOOM <strong id="iZoom">1.00×</strong></div>
+    </div>
+  </div>
+</div>
+
+<div class="eq-ov" id="eqOv">
+  <div class="eq-box">
+    <button class="eq-x" onclick="closeEq()">✕</button>
+    <div class="eq-ttl">∑ FOURIER DECOMPOSITION</div>
+    <div class="eq-tabs">
+      <button class="eq-tb active" onclick="eqTab('formula',this)">Formula</button>
+      <button class="eq-tb" onclick="eqTab('spectrum',this)">Spectrum</button>
+      <button class="eq-tb" onclick="eqTab('export',this)">Compact</button>
+    </div>
+    <div id="ep-formula" class="eq-pane active">
+      <div class="eq-code" id="eqCode"></div>
+      <div style="overflow-x:auto;max-height:260px"><table class="eq-tbl" id="eqTbl"></table></div>
+    </div>
+    <div id="ep-spectrum" class="eq-pane">
+      <canvas id="specCv"></canvas>
+      <p style="font-size:.57rem;color:var(--dim);text-align:center">Height=amplitude · <span style="color:#3060c8">Blue</span>=CCW · <span style="color:#c04060">Red</span>=CW · <span style="color:#c8a030">Gold</span>=DC</p>
+    </div>
+    <div id="ep-export" class="eq-pane">
+      <p style="font-size:.63rem;color:var(--dim);margin-bottom:.45rem;line-height:1.58"><strong style="color:var(--acc)">Shorthand</strong> — <code style="color:var(--acc)">freq:amp∠phase</code>:</p>
+      <div class="exp-code" id="expSH"></div>
+      <p style="font-size:.63rem;color:var(--dim);margin:.55rem 0 .45rem"><strong style="color:var(--acc)">JSON</strong> — <code style="color:var(--acc)">[freq, amp, phase]</code>:</p>
+      <div class="exp-code" id="expJS"></div>
+      <div class="eq-cta">
+        <button class="btn cta-btn" onclick="cpExp('SH')">⎘ Copy Shorthand</button>
+        <button class="btn cta-btn" onclick="cpExp('JS')">⎘ Copy JSON</button>
+      </div>
+    </div>
+  </div>
+</div>
+<canvas id="off" style="display:none;position:fixed;left:-9999px;top:-9999px"></canvas>
+
+<script>
+'use strict';
+const DPR=window.devicePixelRatio||1;
+const iCv=document.getElementById('iCv'),fCv=document.getElementById('fCv');
+const offC=document.getElementById('off');
+const iCtx=iCv.getContext('2d'),fCtx=fCv.getContext('2d'),offX=offC.getContext('2d');
+const wrap=document.getElementById('cwrap');
+const LW=()=>fCv.width/DPR,LH=()=>fCv.height/DPR;
+
+function resize(){const w=wrap.clientWidth,h=wrap.clientHeight;if(!w||!h)return;for(const cv of[iCv,fCv]){cv.width=w*DPR;cv.height=h*DPR;cv.style.width=w+'px';cv.style.height=h+'px';}}
+let _rt;new ResizeObserver(()=>{clearTimeout(_rt);_rt=setTimeout(resize,40);}).observe(wrap);
+setTimeout(resize,60);
+
+function clr(ctx){ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);}
+function apV(ctx){ctx.setTransform(DPR*V.sc,0,0,DPR*V.sc,DPR*V.tx,DPR*V.ty);}
+
+const V={tx:0,ty:0,sc:1};
+function zAt(mx,my,f){const wx=(mx-V.tx)/V.sc,wy=(my-V.ty)/V.sc;V.sc=Math.max(.06,Math.min(200,V.sc*f));V.tx=mx-wx*V.sc;V.ty=my-wy*V.sc;syncZ();}
+function zStep(f){zAt(LW()/2,LH()/2,f);}
+function resetV(){V.tx=0;V.ty=0;V.sc=1;syncZ();}
+function syncZ(){document.getElementById('zlbl').textContent=Math.round(V.sc*100)+'%';document.getElementById('iZoom').textContent=V.sc.toFixed(2)+'×';}
+wrap.addEventListener('wheel',e=>{e.preventDefault();const r=fCv.getBoundingClientRect();zAt(e.clientX-r.left,e.clientY-r.top,e.deltaY<0?1.1:1/1.1);},{passive:false});
+let panning=false,pL={x:0,y:0};
+wrap.addEventListener('mousedown',e=>{if((S.running||S.paused)&&document.getElementById('followSel').value==='off'){panning=true;pL={x:e.clientX,y:e.clientY};wrap.classList.add('panning');}});
+window.addEventListener('mousemove',e=>{if(!panning)return;V.tx+=e.clientX-pL.x;V.ty+=e.clientY-pL.y;pL={x:e.clientX,y:e.clientY};syncZ();});
+window.addEventListener('mouseup',()=>{panning=false;wrap.classList.remove('panning');});
+let pinD=0;
+wrap.addEventListener('touchstart',e=>{if(e.touches.length===2){e.preventDefault();pinD=tDst(e.touches);}},{passive:false});
+wrap.addEventListener('touchmove',e=>{if(e.touches.length===2&&pinD>0){e.preventDefault();const d=tDst(e.touches),r=fCv.getBoundingClientRect();zAt((e.touches[0].clientX+e.touches[1].clientX)/2-r.left,(e.touches[0].clientY+e.touches[1].clientY)/2-r.top,d/pinD);pinD=d;}},{passive:false});
+function tDst(t){return Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);}
+
+const PAL={light:{c:'#1c3878',a:'#7a4c14',t:'#78122a'},dark:{c:'#7090e0',a:'#c8a030',t:'#d84070'}};
+function toggleTheme(){const r=document.documentElement,dk=r.dataset.theme==='dark';r.dataset.theme=dk?'light':'dark';document.getElementById('thBtn').textContent=dk?'🌙':'☀';const p=PAL[r.dataset.theme];document.getElementById('cC').value=p.c;document.getElementById('cA').value=p.a;document.getElementById('cT').value=p.t;}
+function toggleSB(){document.getElementById('app').classList.toggle('sb-off');}
+
+// Font preview update
+function updateFontPrev(){
+  const sel=document.getElementById('fontSel');
+  const fam=sel.value;
+  const raw=sel.options[sel.selectedIndex].text.replace(' ✦','').replace(/ \(.*\)/,'');
+  const prev=document.getElementById('fontPrev');
+  prev.style.fontFamily=fam;
+  prev.textContent=raw;
+}
+updateFontPrev();
+
+const FSIZES=[512,1024,2048,4096];
+function onFftRes(){const v=FSIZES[+document.getElementById('sFR').value];document.getElementById('vFR').textContent=v+' pts';document.getElementById('sE').max=v;document.getElementById('sFE').max=v;document.getElementById('nFE').max=v;}
+onFftRes();
+
+function getSpd(){return Math.pow(10,-4+document.getElementById('sSp').value*.05);}
+function syncSpd(){const v=getSpd();const s=v<.001?v.toExponential(1):v<.1?v.toFixed(4):v<1?v.toFixed(3):v.toFixed(2);document.getElementById('vSp').textContent=s+'×';}
+syncSpd();
+
+// Auto trail length: enough points to show approximately one full cycle
+function autoTrail(){
+  if(!S.fftN){return;}
+  const spd=getSpd();
+  // Points per cycle = fftN / min(spd, 1) at slow speeds
+  const ppc=Math.min(100000,Math.max(2000,Math.round(S.fftN/Math.min(1,spd))));
+  document.getElementById('sTl').value=ppc;
+  document.getElementById('vTl').textContent=ppc;
+}
+
+// Cycle seek — fix #5
+function seekCycle(pct){
+  if(!S.running&&!S.paused)return;
+  S.time=(parseFloat(pct)/100)*2*Math.PI;
+  S.trail=[];S.lastRafTime=0;
+  document.getElementById('vCycPct').textContent=Math.round(pct)+'%';
+  document.getElementById('sCyc').value=pct;
+}
+function adjCycle(delta){
+  const cur=(S.time/(2*Math.PI))*100;
+  const np=Math.max(0,Math.min(99.9,cur+delta));
+  seekCycle(np);
+}
+
+function syncFE(from){const mx=+document.getElementById('sFE').max;if(from==='r'){document.getElementById('nFE').value=document.getElementById('sFE').value;}else{const v=Math.max(1,Math.min(mx,+document.getElementById('nFE').value||1));document.getElementById('sFE').value=v;document.getElementById('nFE').value=v;}}
+function adjFE(d){const cur=+document.getElementById('sFE').value,mx=+document.getElementById('sFE').max,v=Math.max(1,Math.min(mx,cur+d));document.getElementById('sFE').value=v;document.getElementById('nFE').value=v;}
+
+const S={tab:'draw',drawing:false,inputPts:[],centroid:{x:0,y:0},
+  fourier:[],fftN:0,time:0,trail:[],running:false,paused:false,animId:null,
+  trailCutoff:1,isOpen:false,gaps:[],lastRafTime:0,frameN:0};
+
+function switchTab(t){S.tab=t;const bm={draw:'tdBtn',upload:'tuBtn',text:'ttBtn'};['draw','upload','text'].forEach(id=>{document.getElementById(bm[id]).classList.toggle('active',id===t);document.getElementById('tc-'+id).classList.toggle('active',id===t);});iCv.style.pointerEvents=t==='draw'?'auto':'none';const hints={draw:'DRAW YOUR PATH',upload:'UPLOAD AN IMAGE OR SVG',text:'TYPE TEXT → CONVERT → RUN'};showHint(hints[t]);setTimeout(()=>document.getElementById('hint').style.opacity='0',1500);}
+
+function showHint(txt){const h=document.getElementById('hint');h.textContent=txt;h.style.opacity='.55';}
+
+function evXY(e){const r=iCv.getBoundingClientRect(),s=e.touches?e.touches[0]:e;return{x:s.clientX-r.left,y:s.clientY-r.top};}
+iCv.addEventListener('mousedown',e=>startDraw(evXY(e)));
+iCv.addEventListener('mousemove',e=>{if(S.drawing)addPt(evXY(e));});
+iCv.addEventListener('mouseup',endDraw);iCv.addEventListener('mouseleave',endDraw);
+iCv.addEventListener('touchstart',e=>{e.preventDefault();if(e.touches.length===1)startDraw(evXY(e));},{passive:false});
+iCv.addEventListener('touchmove',e=>{e.preventDefault();if(e.touches.length===1)addPt(evXY(e));},{passive:false});
+iCv.addEventListener('touchend',e=>{e.preventDefault();endDraw();},{passive:false});
+
+function startDraw(pos){if(S.tab!=='draw')return;if(S.running)stopAnim();clearFourier();S.drawing=true;S.inputPts=[pos];S.gaps=[];clr(iCtx);iCtx.setTransform(DPR,0,0,DPR,0,0);iCtx.beginPath();iCtx.moveTo(pos.x,pos.y);document.getElementById('runD').disabled=true;setStatus('run','DRAWING…');}
+function addPt(pos){if(!S.drawing)return;const lp=S.inputPts[S.inputPts.length-1];if((pos.x-lp.x)**2+(pos.y-lp.y)**2<4)return;S.inputPts.push(pos);iCtx.lineTo(pos.x,pos.y);iCtx.strokeStyle=document.getElementById('cT').value+'bb';iCtx.lineWidth=2;iCtx.lineCap=iCtx.lineJoin='round';iCtx.stroke();document.getElementById('iPts').textContent=S.inputPts.length;}
+function endDraw(){if(!S.drawing)return;S.drawing=false;if(S.inputPts.length>20){document.getElementById('runD').disabled=false;setStatus('on','PATH READY — PRESS ▶');}else setStatus('','IDLE — DRAW MORE');}
+
+function drawInput(){
+  const pts=S.inputPts;if(pts.length<2)return;
+  clr(iCtx);iCtx.save();apV(iCtx);
+  iCtx.beginPath();let cum=0,tot=0;const lens=[];
+  for(let i=0;i<pts.length-1;i++){const d=Math.hypot(pts[i+1].x-pts[i].x,pts[i+1].y-pts[i].y);lens.push(d);tot+=d;}
+  for(let i=0;i<pts.length;i++){const f=tot>0?cum/tot:0;const inG=S.gaps.some(g=>f>=g.s&&f<=g.e);if(i===0||inG)iCtx.moveTo(pts[i].x,pts[i].y);else iCtx.lineTo(pts[i].x,pts[i].y);if(i<lens.length)cum+=lens[i];}
+  iCtx.strokeStyle=document.getElementById('cT').value+'66';iCtx.lineWidth=1.5/V.sc;iCtx.lineCap=iCtx.lineJoin='round';iCtx.stroke();iCtx.restore();
+}
+
+const uzone=document.getElementById('uzone');
+uzone.addEventListener('dragover',e=>{e.preventDefault();uzone.classList.add('over');});
+uzone.addEventListener('dragleave',()=>uzone.classList.remove('over'));
+uzone.addEventListener('drop',e=>{e.preventDefault();uzone.classList.remove('over');if(e.dataTransfer.files[0])doFile(e.dataTransfer.files[0]);});
+function handleFile(e){if(e.target.files[0])doFile(e.target.files[0]);}
+function doFile(file){setStatus('run','READING…');upSt('reading…');document.getElementById('runU').disabled=true;const svg=file.name.toLowerCase().endsWith('.svg');const rd=new FileReader();rd.onload=ev=>loadURL(ev.target.result,svg);rd.onerror=()=>setStatus('err','READ ERROR');rd.readAsDataURL(file);}
+function loadURL(url,isSvg){
+  const img=new Image();
+  img.onload=()=>{const SZ=720;offC.width=offC.height=SZ;offX.fillStyle='#ffffff';offX.fillRect(0,0,SZ,SZ);const sc=Math.min(SZ/img.width,SZ/img.height);offX.drawImage(img,(SZ-img.width*sc)/2,(SZ-img.height*sc)/2,img.width*sc,img.height*sc);const imgData=offX.getImageData(0,0,SZ,SZ);upSt('extracting…');setTimeout(()=>{const mode=document.getElementById('extMode').value;const result=mode==='sil'?extSilhouette(imgData,SZ,SZ):extLineArt(imgData,SZ,SZ,SZ*0.012);if(!result.pts||result.pts.length<20){setStatus('err','NO PATH');upSt('failed');return;}loadPts(result);document.getElementById('runU').disabled=false;upSt(mode+' · '+result.pts.length+' pts');setStatus('on','LOADED — PRESS ▶');},20);};
+  img.onerror=()=>setStatus('err','LOAD ERROR');img.src=url;
+}
+
+function processText(){
+  const txt=document.getElementById('textIn').value.trim();if(!txt){setStatus('err','ENTER TEXT');return;}
+  const font=document.getElementById('fontSel').value;let sz=+document.getElementById('sFS').value;
+  const approxW=sz*txt.length*.72,targetW=LW()*.85;
+  if(approxW>targetW){sz=Math.max(30,Math.floor(sz*targetW/approxW));document.getElementById('vFSa').textContent='(auto→'+sz+'px)';}
+  setStatus('run','RENDERING TEXT…');
+  setTimeout(()=>{
+    const mc=document.createElement('canvas'),mx=mc.getContext('2d');mx.font=`bold ${sz}px ${font}`;const textW=Math.ceil(mx.measureText(txt).width);
+    const W=Math.min(3000,textW+120),H=Math.ceil(sz*2.5);
+    offC.width=W;offC.height=H;offX.fillStyle='#ffffff';offX.fillRect(0,0,W,H);offX.font=`bold ${sz}px ${font}`;
+    const rmode=document.getElementById('renderMode').value;
+    if(rmode==='stroke'){offX.strokeStyle='#000000';offX.lineWidth=Math.max(2.5,sz*.05);offX.lineJoin='round';offX.lineCap='round';offX.strokeText(txt,40,sz*1.25);}
+    else{offX.fillStyle='#000000';offX.fillText(txt,40,sz*1.25);}
+    const imgData=offX.getImageData(0,0,W,H);
+    // maxJump proportional to font size for consistent gap detection
+    const mj=rmode==='stroke'?Math.max(8,sz*.08):Math.max(12,sz*.14);
+    const result=extLineArt(imgData,W,H,mj);
+    if(!result.pts||result.pts.length<10){setStatus('err','TEXT FAILED');return;}
+    loadPts(result);document.getElementById('runT').disabled=false;setStatus('on','TEXT PATH READY — PRESS ▶');
+  },20);
+}
+
+function loadPts(data){
+  const pts=Array.isArray(data)?data:data.pts;S.gaps=Array.isArray(data)?[]:(data.gaps||[]);
+  const mapped=fitCv(pts,LW(),LH());S.inputPts=mapped;
+  clr(iCtx);iCtx.setTransform(DPR,0,0,DPR,0,0);iCtx.beginPath();
+  let cum=0,tot=0;const lens=[];for(let i=0;i<mapped.length-1;i++){const d=Math.hypot(mapped[i+1].x-mapped[i].x,mapped[i+1].y-mapped[i].y);lens.push(d);tot+=d;}
+  for(let i=0;i<mapped.length;i++){const f=tot>0?cum/tot:0;const inG=S.gaps.some(g=>f>=g.s&&f<=g.e);if(i===0||inG)iCtx.moveTo(mapped[i].x,mapped[i].y);else iCtx.lineTo(mapped[i].x,mapped[i].y);if(i<lens.length)cum+=lens[i];}
+  iCtx.strokeStyle=document.getElementById('cT').value+'bb';iCtx.lineWidth=1.4;iCtx.lineCap=iCtx.lineJoin='round';iCtx.stroke();
+  document.getElementById('iPts').textContent=pts.length;
+}
+
+function getGray(d,N){const g=new Float32Array(N);for(let i=0;i<N;i++)g[i]=(d[i*4]*.299+d[i*4+1]*.587+d[i*4+2]*.114)/255;return g;}
+function otsu(gray,N){const h=new Float64Array(256);for(let i=0;i<N;i++)h[Math.min(255,gray[i]*255|0)]++;let sum=0;for(let i=0;i<256;i++)sum+=i*h[i];let sb=0,wb=0,best=0,t=0;for(let i=0;i<256;i++){wb+=h[i];if(!wb)continue;const wf=N-wb;if(!wf)break;sb+=i*h[i];const v=wb*wf*((sb/wb-(sum-sb)/wf)**2);if(v>best){best=v;t=i;}}return t/255;}
+function fgB(gray,N,thr){let b=0;for(const g of gray)if(g>thr)b++;return b/N<.55;}
+
+function extSilhouette(imgData,iw,ih){const gray=getGray(imgData.data,iw*ih),thr=otsu(gray,iw*ih);const fg=fgB(gray,iw*ih,thr);const bin=new Uint8Array(iw*ih);for(let i=0;i<gray.length;i++)bin[i]=(fg?gray[i]>thr:gray[i]<=thr)?1:0;let cx=0,cy=0,cnt=0;for(let y=0;y<ih;y++)for(let x=0;x<iw;x++)if(bin[y*iw+x]){cx+=x;cy+=y;cnt++;}if(!cnt)return{pts:[],gaps:[]};cx/=cnt;cy/=cnt;const RAYS=512,pts=[],maxR=Math.ceil(Math.hypot(iw,ih));for(let a=0;a<RAYS;a++){const ang=(a/RAYS)*2*Math.PI,ca=Math.cos(ang),sa=Math.sin(ang);let fx=Math.round(cx),fy=Math.round(cy),found=false;for(let r=1;r<maxR;r++){const nx=Math.round(cx+r*ca),ny=Math.round(cy+r*sa);if(nx<0||nx>=iw||ny<0||ny>=ih)break;if(bin[ny*iw+nx]){fx=nx;fy=ny;found=true;}}if(found)pts.push({x:fx,y:fy});}return{pts,gaps:[]};}
+
+function extLineArt(imgData,iw,ih,maxJump=10){
+  const gray=getGray(imgData.data,iw*ih),thr=otsu(gray,iw*ih);const fg=fgB(gray,iw*ih,thr);
+  const dirs=[[-1,0],[1,0],[0,-1],[0,1]];const pts=[];
+  for(let y=1;y<ih-1;y++)for(let x=1;x<iw-1;x++){const isFg=fg?gray[y*iw+x]>thr:gray[y*iw+x]<=thr;if(!isFg)continue;let edge=false;for(const[dx,dy]of dirs){const ng=gray[(y+dy)*iw+(x+dx)];if(!(fg?ng>thr:ng<=thr)){edge=true;break;}}if(edge)pts.push({x,y});}
+  if(!pts.length)return{pts:[],gaps:[]};
+  const sub=gridSub(pts,3000);const traced=nnTrace(sub,maxJump);
+  const smoothed=smoothPts(traced.pts,traced.gaps,6);
+  const optimized=optimizeSegs({pts:smoothed,gaps:traced.gaps});
+  return optimized;
+}
+
+function gridSub(pts,maxN){if(pts.length<=maxN)return pts;const step=Math.ceil(Math.sqrt(pts.length/maxN));const seen=new Set(),out=[];for(const p of pts){const k=`${p.x/step|0},${p.y/step|0}`;if(!seen.has(k)){seen.add(k);out.push(p);}}return out;}
+
+function nnTrace(pts,maxJump){
+  const n=pts.length;if(!n)return{pts:[],gaps:[]};
+  const used=new Uint8Array(n);const out=[pts[0]];used[0]=1;
+  const cell=Math.max(1,maxJump/3|0);const gm=new Map();
+  for(let i=0;i<n;i++){const k=`${pts[i].x/cell|0},${pts[i].y/cell|0}`;if(!gm.has(k))gm.set(k,[]);gm.get(k).push(i);}
+  const rad=Math.ceil(maxJump/cell)+1;
+  for(let iter=1;iter<n;iter++){
+    const last=out[out.length-1],cx=last.x/cell|0,cy=last.y/cell|0;let best=-1,bd=Infinity;
+    for(let dy=-rad;dy<=rad;dy++)for(let dx=-rad;dx<=rad;dx++){const c=gm.get(`${cx+dx},${cy+dy}`);if(!c)continue;for(const i of c){if(used[i])continue;const d=(pts[i].x-last.x)**2+(pts[i].y-last.y)**2;if(d<bd){bd=d;best=i;}}}
+    if(best===-1){for(let i=0;i<n;i++){if(used[i])continue;const d=(pts[i].x-last.x)**2+(pts[i].y-last.y)**2;if(d<bd){bd=d;best=i;}}}
+    if(best===-1)break;used[best]=1;out.push(pts[best]);
+  }
+  const steps=[];let tot=0;for(let i=0;i<out.length-1;i++){const d=Math.hypot(out[i+1].x-out[i].x,out[i+1].y-out[i].y);steps.push(d);tot+=d;}
+  const gapThr=maxJump*3;const gaps=[];let cum=0;
+  for(let i=0;i<steps.length;i++){if(steps[i]>gapThr)gaps.push({s:cum/tot,e:(cum+steps[i])/tot});cum+=steps[i];}
+  return{pts:out,gaps};
+}
+
+function smoothPts(pts,gaps,radius){
+  const n=pts.length;if(n<3||radius<1)return pts;
+  let tot=0;const cum=[0];for(let i=0;i<n-1;i++){tot+=Math.hypot(pts[i+1].x-pts[i].x,pts[i+1].y-pts[i].y);cum.push(tot);}
+  const gm=new Uint8Array(n);if(tot>0)for(let i=0;i<n;i++){const f=cum[i]/tot;for(const g of gaps)if(f>=g.s-.003&&f<=g.e+.003){gm[i]=1;break;}}
+  return pts.map((p,i)=>{if(gm[i])return p;let sx=0,sy=0,w=0;for(let j=-radius;j<=radius;j++){const k=Math.max(0,Math.min(n-1,i+j));if(gm[k])continue;const wj=1/(1+Math.abs(j)*.5);sx+=pts[k].x*wj;sy+=pts[k].y*wj;w+=wj;}return w>0?{x:sx/w,y:sy/w}:p;});
+}
+
+function optimizeSegs(traced){const{pts,gaps}=traced;if(!gaps.length||pts.length<4)return traced;const segs=splitAtGaps(pts,gaps);if(segs.length<=1)return traced;return reconnect(greedySort(segs));}
+
+function splitAtGaps(pts,gaps){if(!gaps.length||!pts.length)return[pts];let tot=0;const lens=[];for(let i=0;i<pts.length-1;i++){const d=Math.hypot(pts[i+1].x-pts[i].x,pts[i+1].y-pts[i].y);lens.push(d);tot+=d;}const segs=[];let segStart=0,cum=0;for(let i=0;i<lens.length;i++){const f=cum/tot;if(gaps.some(g=>f>=g.s-.001&&f<=g.e+.001)){if(i>=segStart)segs.push(pts.slice(segStart,i+1));segStart=i+1;}cum+=lens[i];}segs.push(pts.slice(segStart));return segs.filter(s=>s.length>=2);}
+
+function greedySort(segs){if(segs.length<=1)return segs;const result=[segs[0]],rem=[...segs.slice(1)];while(rem.length){const last=result[result.length-1],lp=last[last.length-1];let bi=0,bd=Infinity,rev=false;for(let i=0;i<rem.length;i++){const s=rem[i],d1=Math.hypot(lp.x-s[0].x,lp.y-s[0].y),d2=Math.hypot(lp.x-s[s.length-1].x,lp.y-s[s.length-1].y);if(d1<bd){bd=d1;bi=i;rev=false;}if(d2<bd){bd=d2;bi=i;rev=true;}}let seg=rem.splice(bi,1)[0];if(rev)seg=[...seg].reverse();result.push(seg);}return result;}
+
+function reconnect(segs){if(!segs.length)return{pts:[],gaps:[]};const pts=[];for(const s of segs)for(const p of s)pts.push(p);const steps=[];let tot=0;for(let i=0;i<pts.length-1;i++){const d=Math.hypot(pts[i+1].x-pts[i].x,pts[i+1].y-pts[i].y);steps.push(d);tot+=d;}const segLens=segs.map(s=>{let l=0;for(let i=0;i<s.length-1;i++)l+=Math.hypot(s[i+1].x-s[i].x,s[i+1].y-s[i].y);return l;});const gaps=[];let cum=0;for(let si=0;si<segs.length-1;si++){cum+=segLens[si];const connLen=Math.hypot(segs[si][segs[si].length-1].x-segs[si+1][0].x,segs[si][segs[si].length-1].y-segs[si+1][0].y);if(connLen>3&&tot>0)gaps.push({s:cum/tot,e:(cum+connLen)/tot});cum+=connLen;}return{pts,gaps};}
+
+function fitCv(pts,cw,ch,mg=.1){const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y);const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);const sc=Math.min(cw*(1-2*mg)/(x1-x0||1),ch*(1-2*mg)/(y1-y0||1));const ox=(cw-(x1-x0)*sc)/2,oy=(ch-(y1-y0)*sc)/2;return pts.map(p=>({x:(p.x-x0)*sc+ox,y:(p.y-y0)*sc+oy}));}
+
+const nxt2=n=>{let p=1;while(p<n)p<<=1;return p;};
+function fftIP(re,im){const N=re.length;for(let i=1,j=0;i<N;i++){let b=N>>1;for(;j&b;b>>=1)j^=b;j^=b;if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t;}}for(let len=2;len<=N;len<<=1){const a=-2*Math.PI/len,wc=Math.cos(a),ws=Math.sin(a);for(let i=0;i<N;i+=len){let wr=1,wi=0;for(let j=0,h=len>>1;j<h;j++){const ur=re[i+j],ui=im[i+j],vr=re[i+j+h]*wr-im[i+j+h]*wi,vi=im[i+j+h]*wr+re[i+j+h]*wi;re[i+j]=ur+vr;im[i+j]=ui+vi;re[i+j+h]=ur-vr;im[i+j+h]=ui-vi;const nwr=wr*wc-wi*ws;wi=wr*ws+wi*wc;wr=nwr;}}}}
+function computeFFT(pts){const N=nxt2(pts.length),re=new Float64Array(N),im=new Float64Array(N);for(let i=0;i<pts.length;i++){re[i]=pts[i].x;im[i]=pts[i].y;}fftIP(re,im);const out=[];for(let k=0;k<N;k++)out.push({freq:k<=N/2?k:k-N,amp:Math.hypot(re[k],im[k])/N,phase:Math.atan2(im[k],re[k])});return out.sort((a,b)=>b.amp-a.amp);}
+
+function resample(pts,N){const n=pts.length;if(n<=1)return pts;const lens=new Float64Array(n);let tot=0;for(let i=0;i<n;i++){const j=(i+1)%n;lens[i]=Math.hypot(pts[j].x-pts[i].x,pts[j].y-pts[i].y);tot+=lens[i];}if(!tot)return pts;const cum=new Float64Array(n+1);for(let i=0;i<n;i++)cum[i+1]=cum[i]+lens[i];const out=[];let seg=0;for(let k=0;k<N;k++){const tgt=(k/N)*tot;while(seg<n-1&&cum[seg+1]<tgt)seg++;const t=lens[seg]>0?(tgt-cum[seg])/lens[seg]:0,j=(seg+1)%n;out.push({x:pts[seg].x+t*(pts[j].x-pts[seg].x),y:pts[seg].y+t*(pts[j].y-pts[seg].y)});}return out;}
+
+function computeCutoff(raw){const n=raw.length;if(n<2)return{cutoff:1,isOpen:false};let rLen=0;for(let i=0;i<n-1;i++)rLen+=Math.hypot(raw[i+1].x-raw[i].x,raw[i+1].y-raw[i].y);const cLen=Math.hypot(raw[0].x-raw[n-1].x,raw[0].y-raw[n-1].y);const THR=Math.max(20,Math.min(LW(),LH())*.025);return cLen<THR?{cutoff:1,isOpen:false}:{cutoff:rLen/(rLen+cLen),isOpen:true};}
+
+// Tip computation — zoom-adaptive threshold so tiny components are included at high zoom
+function computeTip(nEpc,time){
+  let x=S.centroid.x,y=S.centroid.y;const n=Math.min(nEpc,S.fourier.length);
+  const minA=Math.max(0.0001,0.01/Math.min(V.sc,200)); // finer at high zoom
+  for(let i=0;i<n;i++){const{freq,amp,phase}=S.fourier[i];if(amp<minA)continue;const a=freq*time+phase;x+=amp*Math.cos(a);y+=amp*Math.sin(a);}return{x,y};
+}
+
+function startFourier(){
+  if(!S.inputPts.length){setStatus('err','NO PATH');return;}
+  stopAnim();resetV();setStatus('run','COMPUTING FFT…');
+  ['runD','runU','runT'].forEach(id=>document.getElementById(id).disabled=true);
+  setTimeout(()=>{
+    const{cutoff,isOpen}=computeCutoff(S.inputPts);S.trailCutoff=cutoff;S.isOpen=isOpen;
+    // Scale gap fractions to match closed-loop resampled parameterisation
+    const gapScale=isOpen?cutoff:1.0;S.gaps=S.gaps.map(g=>({s:g.s*gapScale,e:g.e*gapScale}));
+    const TARGET=FSIZES[+document.getElementById('sFR').value];
+    const uniform=resample(S.inputPts,TARGET);
+    let cx=0,cy=0;for(const p of uniform){cx+=p.x;cy+=p.y;}cx/=uniform.length;cy/=uniform.length;S.centroid={x:cx,y:cy};
+    S.fourier=computeFFT(uniform.map(p=>({x:p.x-cx,y:p.y-cy})));
+    S.fftN=nxt2(uniform.length);S.time=0;S.trail=[];S.running=true;S.paused=false;S.lastRafTime=0;S.frameN=0;
+    document.getElementById('iN').textContent=S.fftN;document.getElementById('iEpc').textContent=S.fourier.length;
+    document.getElementById('pBtn').disabled=false;document.getElementById('rBtn').disabled=false;document.getElementById('eqBtn').disabled=false;
+    iCv.style.pointerEvents='none';
+    document.getElementById('seekSection').classList.add('vis');
+    document.getElementById('sCyc').value=0;document.getElementById('vCycPct').textContent='0%';
+    setStatus('run',isOpen?'RUNNING (OPEN PATH)':'RUNNING');
+    // Brief hint, then fade
+    showHint('SCROLL TO ZOOM · DRAG TO PAN');setTimeout(()=>document.getElementById('hint').style.opacity='0',3000);
+    animate();
+  },30);
+}
+
+function buildChain(nEpc,time,minAmp){const chain=[{x:S.centroid.x,y:S.centroid.y}];let x=S.centroid.x,y=S.centroid.y;for(let i=0;i<nEpc;i++){const{freq,amp,phase}=S.fourier[i];if(amp<minAmp)continue;const a=freq*time+phase;x+=amp*Math.cos(a);y+=amp*Math.sin(a);chain.push({x,y,amp,epiIdx:i});}return chain;}
+
+function animate(){
+  if(!S.running)return;
+  // Freeze glitch fix: skip time advance if browser was paused too long
+  const now=performance.now();const elapsed=S.lastRafTime?now-S.lastRafTime:16;S.lastRafTime=now;
+  const shouldAdvance=!S.paused&&elapsed<250;
+
+  const nEpc=Math.min(+document.getElementById('sE').value,S.fourier.length);
+  const spd=getSpd();const maxTr=+document.getElementById('sTl').value;
+  const renderMin=(+document.getElementById('sMn').value/10)/V.sc;
+  const cOp=+document.getElementById('sCO').value/100,cSW=+document.getElementById('sCS').value/10,lW=+document.getElementById('sLW').value/10;
+  const showC=document.getElementById('tSC').checked,showA=document.getElementById('tSA').checked;
+  const doFd=document.getElementById('tTF').checked,showI=document.getElementById('tSD').checked;
+  const showTR=document.getElementById('tTR').checked; // track highlight ring
+  const showCR=document.getElementById('tCR').checked; // centre pulse ring
+  const cC=document.getElementById('cC').value,cA=document.getElementById('cA').value,cT=document.getElementById('cT').value;
+  const stepsPerFrame=Math.max(1,Math.min(24,Math.ceil(spd)));
+  const dt=(2*Math.PI/S.fftN)*spd,subDt=dt/stepsPerFrame;
+
+  const chain=buildChain(nEpc,S.time,renderMin);
+  const fm=document.getElementById('followSel').value;
+  if(fm!=='off'){const tp=fm==='tip'?computeTip(nEpc,S.time):(chain[Math.min(+document.getElementById('sFE').value,chain.length-1)]||computeTip(nEpc,S.time));V.tx=LW()/2-tp.x*V.sc;V.ty=LH()/2-tp.y*V.sc;}
+
+  // Centre pulse ring visibility — fix #3
+  document.getElementById('tring').classList.toggle('vis',fm!=='off'&&showCR);
+
+  clr(fCtx);clr(iCtx);
+  if(showI&&S.inputPts.length>1)drawInput();
+
+  fCtx.save();apV(fCtx);
+  const cAlpH=Math.round(cOp*255).toString(16).padStart(2,'0');
+  for(let i=0;i<chain.length-1;i++){
+    const fr=chain[i],to=chain[i+1],amp=to.amp;
+    // Tracked epicycle highlight — fix #3 (showTR toggle)
+    const tracked=showTR&&fm==='epi'&&+document.getElementById('sFE').value===i+1;
+    if(showC){fCtx.beginPath();fCtx.arc(fr.x,fr.y,amp,0,2*Math.PI);fCtx.strokeStyle=tracked?(cC+'ff'):(cC+cAlpH);fCtx.lineWidth=(tracked?cSW*2:cSW)/V.sc;fCtx.stroke();}
+    if(showA){fCtx.beginPath();fCtx.moveTo(fr.x,fr.y);fCtx.lineTo(to.x,to.y);fCtx.strokeStyle=tracked?(cA+'ff'):(cA+'bb');fCtx.lineWidth=lW/V.sc;fCtx.stroke();if(amp>renderMin*3){const dir=Math.atan2(to.y-fr.y,to.x-fr.x),al=Math.min(8,amp*.4);fCtx.beginPath();fCtx.moveTo(to.x,to.y);fCtx.lineTo(to.x-al*Math.cos(dir-.38),to.y-al*Math.sin(dir-.38));fCtx.lineTo(to.x-al*Math.cos(dir+.38),to.y-al*Math.sin(dir+.38));fCtx.closePath();fCtx.fillStyle=tracked?(cA+'ff'):(cA+'bb');fCtx.fill();}}
+  }
+
+  // Trail with dual gap detection (cf + spatial)
+  const tl=S.trail.length;
+  if(tl>1){
+    const tw=lW*1.5/V.sc;
+    const isGap=i=>{
+      const dcf=S.trail[i].cf-S.trail[i-1].cf;
+      const d=Math.hypot(S.trail[i].x-S.trail[i-1].x,S.trail[i].y-S.trail[i-1].y);
+      return dcf<0||dcf>.015||(dcf>.005&&d>40/V.sc);
+    };
+    const draw=(si,ei,alph)=>{
+      fCtx.beginPath();fCtx.moveTo(S.trail[si].x,S.trail[si].y);
+      for(let i=si+1;i<=ei&&i<tl;i++){if(isGap(i))fCtx.moveTo(S.trail[i].x,S.trail[i].y);else fCtx.lineTo(S.trail[i].x,S.trail[i].y);}
+      fCtx.strokeStyle=cT+alph;fCtx.lineWidth=tw;fCtx.lineJoin=fCtx.lineCap='round';fCtx.stroke();
+    };
+    if(doFd&&tl>80){const SEG=8;for(let s=0;s<SEG;s++){const si=(s/SEG*tl)|0,ei=((s+1)/SEG*tl)|0;if(ei<=si)continue;fCtx.lineWidth=tw*(.5+s*.08);draw(si,ei,Math.round(16+s*32).toString(16).padStart(2,'0'));}}
+    else draw(0,tl-1,'dd');
+  }
+  fCtx.restore();
+
+  if(shouldAdvance){
+    for(let step=0;step<stepsPerFrame;step++){
+      const cf=S.time/(2*Math.PI);
+      const inGap=S.gaps.length>0&&S.gaps.some(g=>cf>=g.s-.002&&cf<=g.e+.002);
+      const inRet=S.isOpen&&cf>=S.trailCutoff;
+      if(!inGap&&!inRet){const tip=computeTip(nEpc,S.time);S.trail.push({x:tip.x,y:tip.y,cf});if(S.trail.length>maxTr)S.trail.shift();}
+      S.time+=subDt;
+      if(S.time>=2*Math.PI){S.time=0;S.trail=[];break;}
+    }
+    const pct=S.time/(2*Math.PI)*100;
+    document.getElementById('iProg').textContent=Math.min(100,pct|0)+'%';
+    // Update seek slider every 6 frames to avoid reflow overhead
+    if((S.frameN%6)===0){document.getElementById('sCyc').value=pct.toFixed(1);document.getElementById('vCycPct').textContent=Math.round(pct)+'%';}
+  }
+  S.frameN=(S.frameN||0)+1;
+  S.animId=requestAnimationFrame(animate);
+}
+
+function togglePause(){S.paused=!S.paused;document.getElementById('pBtn').textContent=S.paused?'▶ Resume':'⏸ Pause';setStatus(S.paused?'on':'run',S.paused?'PAUSED':'RUNNING');}
+function restartAnim(){S.time=0;S.trail=[];S.paused=false;S.lastRafTime=0;S.frameN=0;document.getElementById('pBtn').textContent='⏸ Pause';setStatus('run','RUNNING');document.getElementById('sCyc').value=0;document.getElementById('vCycPct').textContent='0%';}
+function stopAnim(){cancelAnimationFrame(S.animId);S.running=false;S.paused=false;clr(fCtx);clr(iCtx);S.trail=[];S.time=0;S.lastRafTime=0;}
+function clearFourier(){stopAnim();S.fourier=[];S.fftN=0;['pBtn','rBtn','eqBtn'].forEach(id=>document.getElementById(id).disabled=true);document.getElementById('iN').textContent='—';document.getElementById('iEpc').textContent='—';document.getElementById('iProg').textContent='0%';document.getElementById('seekSection').classList.remove('vis');}
+function clearAll(){clearFourier();S.inputPts=[];S.gaps=[];clr(iCtx);iCv.style.pointerEvents=S.tab==='draw'?'auto':'none';['runD','runU','runT'].forEach(id=>document.getElementById(id).disabled=true);document.getElementById('iPts').textContent='0';resetV();setStatus('','IDLE');upSt('');document.getElementById('vFSa').textContent='';document.getElementById('seekSection').classList.remove('vis');}
+function onFollow(){const m=document.getElementById('followSel').value;document.getElementById('epiRow').style.display=m==='epi'?'block':'none';const showCR=document.getElementById('tCR').checked;document.getElementById('tring').classList.toggle('vis',m!=='off'&&showCR);}
+
+function eqTab(n,btn){document.querySelectorAll('.eq-tb').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.eq-pane').forEach(p=>p.classList.remove('active'));btn.classList.add('active');document.getElementById('ep-'+n).classList.add('active');if(n==='spectrum')drawSpectrum();}
+function openEq(){if(!S.fourier.length)return;buildFormula();buildExport();document.getElementById('eqOv').classList.add('vis');}
+function closeEq(){document.getElementById('eqOv').classList.remove('vis');}
+document.getElementById('eqOv').addEventListener('click',e=>{if(e.target===document.getElementById('eqOv'))closeEq();});
+function buildFormula(){const tot=S.fourier.reduce((s,c)=>s+c.amp,0);const terms=S.fourier.slice(0,8).map(c=>{const f=c.freq===0?'0':c.freq>0?`+${c.freq}`:`${c.freq}`;const ph=c.phase>=0?`+${c.phase.toFixed(3)}`:`${c.phase.toFixed(3)}`;return`${c.amp.toFixed(2)}·e^{i(${f}t${ph})}`;}).join('\n  + ');document.getElementById('eqCode').innerHTML=`<span style="color:var(--acc)">z(t)</span> = Σ Aₙ·exp(i·(fₙ·t+φₙ))   N=${S.fftN}\n\nz(t) ≈ ${terms}\n  + … [${S.fourier.length} total]\n∑Aₙ = <span style="color:var(--acc)">${tot.toFixed(2)} px</span>   <span style="color:var(--acc)">${S.isOpen?'OPEN PATH':'CLOSED LOOP'}</span>`;const rows=S.fourier.slice(0,60).map((c,i)=>`<tr><td>${i+1}</td><td>${c.freq>=0?'+':''}${c.freq}</td><td>${c.amp.toFixed(4)}</td><td>${c.phase.toFixed(5)}</td><td>${c.freq===0?'DC':c.freq>0?'↺':'↻'}</td><td>${(c.amp/tot*100).toFixed(2)}%</td></tr>`).join('');const more=S.fourier.length>60?`<tr><td colspan="6" style="color:var(--dim);text-align:center">…${S.fourier.length-60} more</td></tr>`:'';document.getElementById('eqTbl').innerHTML=`<tr><th>#</th><th>Freq</th><th>Amp(px)</th><th>Phase</th><th>Dir</th><th>%Σ</th></tr>${rows}${more}`;}
+function drawSpectrum(){const sc=document.getElementById('specCv');sc.width=(sc.offsetWidth||640)*DPR;sc.height=88*DPR;sc.style.height='88px';const ctx=sc.getContext('2d'),W=sc.width,H=sc.height;ctx.clearRect(0,0,W,H);const maxA=S.fourier[0]?.amp||1,N=Math.min(S.fourier.length,300);const sorted=[...S.fourier.slice(0,N)].sort((a,b)=>a.freq-b.freq);const bw=Math.max(1,W/sorted.length);sorted.forEach((c,i)=>{const h=Math.max(1,(c.amp/maxA)*(H-10));ctx.fillStyle=c.freq===0?'#c8a030':c.freq>0?'#3060c8':'#c84060';ctx.globalAlpha=.82;ctx.fillRect(i*bw,H-h,Math.max(1,bw-.8),h);});ctx.globalAlpha=1;ctx.fillStyle='#888';ctx.font=`${9*DPR}px monospace`;ctx.fillText('−freq',2,H-2);ctx.fillText('+freq',W-46,H-2);}
+function buildExport(){document.getElementById('expSH').textContent='N='+S.fftN+'\n'+S.fourier.map(c=>`${c.freq}:${c.amp.toFixed(4)}∠${c.phase.toFixed(5)}`).join('  ');document.getElementById('expJS').textContent=JSON.stringify({N:S.fftN,c:S.fourier.map(c=>[c.freq,+c.amp.toFixed(4),+c.phase.toFixed(5)])});}
+function cpExp(type){const el=document.getElementById(type==='SH'?'expSH':'expJS');navigator.clipboard.writeText(el.textContent).catch(()=>{});}
+function setStatus(t,msg){document.getElementById('sDot').className='dot'+(t?' '+t:'');document.getElementById('sTxt').textContent=msg;}
+function upSt(t){document.getElementById('upSt').textContent=t;}
+</script>
+</body>
+</html>
